@@ -6,7 +6,7 @@ from src.modules.pipe.saving import Saver
 from src.modules.models.deeponet.deeponet_factory import DeepONetFactory
 from src.modules.models.deeponet.dataset import preprocessing_utils as dtl
 from src.modules.models.tools.metrics.errors import ERROR_METRICS
-from src.modules.models.deeponet.config import DataConfig, TestConfig
+from src.modules.models.config import DataConfig, TestConfig
 from src.modules.models.deeponet.dataset.deeponet_transform import DeepONetTransformPipeline
 
 logger = logging.getLogger(__name__)
@@ -76,6 +76,7 @@ def inference(test_cfg: TestConfig, data_cfg: DataConfig):
     
     for i, _ in enumerate(abs_error):
         if test_cfg.transforms is not None:
+            print(i, data_cfg.targets_labels)
             errors['Physical Error'][data_cfg.targets_labels[i]] = (abs_error / norm_truth)[i]
         else:
             errors['Normalized Error'][data_cfg.targets_labels[i]] = (abs_error / norm_truth)[i]

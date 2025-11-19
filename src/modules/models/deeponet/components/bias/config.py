@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 
 @dataclass
-class BiasConfig:
+class DONBiasConfig:
     num_channels: int
     precomputed_mean: torch.Tensor | None = None
     precomputed_mean_shape: torch.Size | None = None
@@ -35,9 +35,9 @@ class BiasConfig:
         )
 
 
-class BiasConfigValidator:
+class DONBiasConfigValidator:
     @staticmethod
-    def validate(config: BiasConfig):
+    def validate(config: DONBiasConfig):
         if config.precomputed_mean_shape is not None:
             # This means we're doing inference
             config.precomputed_mean = torch.rand(config.precomputed_mean_shape)

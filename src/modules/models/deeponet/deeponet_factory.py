@@ -5,15 +5,15 @@ import dataclasses
 from dataclasses import fields
 from src.modules.models.deeponet.deeponet import DeepONet
 from src.modules.models.deeponet.components.rescaling.rescaler import Rescaler
-from src.modules.models.deeponet.config.deeponet_config import DeepONetConfig
+from src.modules.models.config.don_config import DeepONetConfig
 from src.modules.models.deeponet.components.output_handler.registry import OutputRegistry
-from src.modules.models.deeponet.components.bias.config import BiasConfigValidator
+from src.modules.models.deeponet.components.bias.config import DONBiasConfigValidator
 from src.modules.models.deeponet.components.component_factory import BiasFactory
 from src.modules.models.deeponet.components.component_factory import TrunkFactory
 from src.modules.models.deeponet.components.component_factory import BranchFactory
-from src.modules.models.deeponet.training_strategies.base import TrainingStrategy
-from src.modules.models.deeponet.components.trunk.config import TrunkConfigValidator
-from src.modules.models.deeponet.components.branch.config import BranchConfigValidator
+from src.modules.models.deeponet.training_strategies.base import DONTrainingStrategy
+from src.modules.models.deeponet.components.trunk.config import DONTrunkConfigValidator
+from src.modules.models.deeponet.components.branch.config import DONBranchConfigValidator
 from src.modules.models.deeponet.training_strategies.pod_strategy import PODStrategy
 from src.modules.models.deeponet.training_strategies.vanilla_strategy import VanillaStrategy
 from src.modules.models.deeponet.training_strategies.two_step_strategy import TwoStepStrategy
@@ -31,7 +31,7 @@ class DeepONetFactory:
     configuration validation, and state loading.
     """
     @classmethod
-    def create_for_training(cls, config: DeepONetConfig) -> tuple[DeepONet, TrainingStrategy]:
+    def create_for_training(cls, config: DeepONetConfig) -> tuple[DeepONet, DONTrainingStrategy]:
         """
         Creates a DeepONet model and a corresponding training strategy based on a configuration.
 
@@ -43,7 +43,7 @@ class DeepONetFactory:
                                      parameters for the DeepONet and the training strategy.
 
         Returns:
-            tuple[DeepONet, TrainingStrategy]: A tuple containing the initialized DeepONet
+            tuple[DeepONet, DONTrainingStrategy]: A tuple containing the initialized DeepONet
                                                model and its associated training strategy.
         """
         strategy = cls._create_strategy(
@@ -54,11 +54,14 @@ class DeepONetFactory:
 
         rescaler = Rescaler(config.rescaling)
 
-        BiasConfigValidator.validate(config.bias)
-        BranchConfigValidator.validate(config.branch)
-        TrunkConfigValidator.validate(config.trunk)
+        DONBiasConfigValidator.validate(config.bias)
+        DONBranchConfigValidator.validate(config.branch)
+        DONTrunkConfigValidator.validate(config.trunk)
+
         branch = BranchFactory.build(config.branch)
         trunk = TrunkFactory.build(config.trunk)
+
+
 
         bias = BiasFactory.build(config.bias)
 
@@ -95,7 +98,6 @@ class DeepONetFactory:
         # output_handler.adjust_dimensions(
         #     saved_config)
         rescaler = Rescaler(saved_config.rescaling)
-
 
         trunk = TrunkFactory.build(saved_config.trunk)
         branch = BranchFactory.build(saved_config.branch)
@@ -154,11 +156,11 @@ class DeepONetFactory:
 
             config.trunk.pod_basis = torch.rand(config.trunk.pod_basis_shape)
         else:
-            TrunkConfigValidator.validate(config.trunk)
-            BranchConfigValidator.validate(config.branch)
+            DONTrunkConfigValidator.validate(config.trunk)
+            DONBranchConfigValidator.validate(config.branch)
 
     @classmethod
-    def _create_strategy(cls, config: dict) -> TrainingStrategy:
+    def _create_strategy(cls, config: dict) -> DONTrainingStrategy:
         """
         Initializes and returns a specific training strategy based on the configuration.
 
@@ -166,7 +168,7 @@ class DeepONetFactory:
             config (dict): A dictionary containing the `strategy` configuration details.
 
         Returns:
-            TrainingStrategy: An instance of the requested training strategy.
+            DONTrainingStrategy: An instance of the requested training strategy.
         """
         strategy_map = {
             "vanilla": (VanillaStrategy, VanillaConfig),

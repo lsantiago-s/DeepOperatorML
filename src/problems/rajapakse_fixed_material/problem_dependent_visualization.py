@@ -5,7 +5,7 @@ import numpy as np
 from typing import Any
 from src.problems.rajapakse_fixed_material import postprocessing as ppr
 from src.problems.rajapakse_fixed_material import plot_helper as helper
-from src.modules.models.deeponet.config import DataConfig, TestConfig
+from src.modules.models.config import DataConfig, TestConfig
 
 logger = logging.getLogger(__file__)
 
@@ -124,7 +124,6 @@ def plot_metrics(test_cfg: TestConfig, data_cfg: DataConfig):
         output_data['branch_output'], data_cfg, test_cfg)
     basis = ppr.reshape_basis(output_data['trunk_output'], data_cfg, test_cfg)
     bias = ppr.format_bias(output_data['bias'], data_cfg, test_cfg)
-
     data = {
         'input_functions': input_functions,
         'coordinates': coordinates,

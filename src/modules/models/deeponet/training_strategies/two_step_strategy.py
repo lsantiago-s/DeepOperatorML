@@ -4,10 +4,10 @@ import numpy
 from copy import deepcopy
 from collections import defaultdict
 from typing import TYPE_CHECKING
-from src.modules.models.deeponet.components.output_handler.config import OutputConfig
+from src.modules.models.deeponet.components.output_handler.config import DONOutputConfig
 from src.modules.models.deeponet.deeponet import DeepONet
 from src.modules.models.deeponet.training_strategies.config import TwoStepConfig
-from src.modules.models.deeponet.training_strategies.base import TrainingStrategy
+from src.modules.models.deeponet.training_strategies.base import DONTrainingStrategy
 from src.modules.models.deeponet.components.component_factory import BranchFactory
 from src.modules.models.tools.optimizers.config import OptimizerSpec
 from src.modules.models.deeponet.components.trunk.orthonormal_trunk import OrthonormalTrunk
@@ -16,11 +16,11 @@ from src.modules.models.tools.optimizers.optimizer_factory import create_optimiz
 from src.modules.models.deeponet.components.output_handler import SharedBranchHandler, SharedTrunkHandler, SplitOutputsHandler, Phase2Handler
 if TYPE_CHECKING:
     from src.modules.models.deeponet.deeponet import DeepONet
-    from src.modules.models.deeponet.config.deeponet_config import DeepONetConfig
+    from src.modules.models.config.don_config import DeepONetConfig
     from src.modules.models.deeponet.components.component_factory import BranchFactory
 
 
-class TwoStepStrategy(TrainingStrategy): # TODO: implement share branch decomposition
+class TwoStepStrategy(DONTrainingStrategy): # TODO: implement share branch decomposition
     """
     A training strategy for DeepONets that proceeds in two distinct phases.
     
@@ -221,7 +221,7 @@ class TwoStepStrategy(TrainingStrategy): # TODO: implement share branch decompos
         is_shared_branch = isinstance(model.output_handler, SharedBranchHandler)
         is_shared_trunk = isinstance(model.output_handler, SharedTrunkHandler)
         num_channels = model.output_handler.num_channels
-        handler_cfg = OutputConfig(handler_type='two_step_final', num_channels=num_channels)
+        handler_cfg = DONOutputConfig(handler_type='two_step_final', num_channels=num_channels)
 
         final_branch = OrthonormalBranch(new_inner_branch, R, num_channels, is_shared_branch)
         final_trunk = OrthonormalTrunk(model.trunk, T, num_channels, is_shared_trunk)

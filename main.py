@@ -1,23 +1,15 @@
 import os
-import sys
 import argparse
 import yaml
-import logging
 from src import train_model
 from src import test_model
-from src.modules.models.deeponet.config import DataConfig, TrainConfig, TestConfig
-from src.modules.models.deeponet.config import validator as validation
-
-logger = logging.getLogger(__name__)
-
-logging.basicConfig(
-    filemode='w',
-    level=logging.INFO,
-    format="[%(asctime)s] [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%d-%m-%Y %H:%M:%S",
-    stream=sys.stdout
-)
-
+from src.modules.models.config.fno_train_config import FNOTrainConfig
+from src.modules.pipe.logging import configure_logging
+from src.modules.models.config import DataConfig, DONTrainConfig, TestConfig
+from src.modules.models.config import validator as validation
+from src.modules.pipe.logging import configure_logging
+from src.modules.pipe.train import get_train_config_class
+    
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--problem", help="Type problem to be solved.")
@@ -37,11 +29,21 @@ def main() -> None:
         problem=args.problem,
         exp_cfg=yaml.safe_load(open(experiment_config_path))
     )
-    train_cfg = TrainConfig.from_config_files(
-        exp_cfg_path=experiment_config_path,
-        train_cfg_path=train_config_path,
-        data_cfg=data_cfg
-    )
+    if get_train_config_class(yaml.safe_load(open(experiment_config_path))['model']) is DONTrainConfig:
+        train_cfg = DONTrainConfig.from_config_files(
+            exp_cfg_path=experiment_config_path,
+            train_cfg_path=train_config_path,
+            data_cfg=data_cfg
+        )
+    elif get_train_config_class(yaml.safe_load(open(experiment_config_path))['model']) is FNOTrainConfig:
+        train_cfg = FNOTrainConfig.from_config_files(
+            exp_cfg_path=experiment_config_path,
+            train_cfg_path=train_config_path,
+            data_cfg=data_cfg
+        )
+        pass
+    else:
+        raise NotImplementedError(f"Model {yaml.safe_load(open(experiment_config_path))['model']} not implemented yet.")
 
     validation.validate_train_config(train_cfg)
     validation.validate_config_compatibility(data_cfg, train_cfg)
@@ -67,4 +69,5 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    configure_logging()
     main()

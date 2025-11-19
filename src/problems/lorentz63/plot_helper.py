@@ -5,7 +5,7 @@ from tqdm.auto import tqdm
 import matplotlib.pyplot as plt
 from src.problems.lorentz63.plot_trajectories import plot_lorenz_trajectories, plot_lorenz_trajectories_3d
 from src.problems.lorentz63.plot_basis import plot_basis_component, plot_basis_3d
-from src.modules.models.deeponet.config import DataConfig, TestConfig
+from src.modules.models.config import DataConfig, TestConfig
 from src.problems.lorentz63.plot_coeffs import plot_coefficients, plot_coefficients_mean
 
 logger = logging.getLogger(__file__)

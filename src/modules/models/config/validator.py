@@ -1,17 +1,17 @@
 from __future__ import annotations
 from typing import Any
 from dataclasses import dataclass
-from src.modules.models.deeponet.config.deeponet_config import DeepONetConfig
-from src.modules.models.deeponet.dataset.transform_config import TransformConfig
-from src.modules.models.deeponet.dataset.transform_config import TransformConfig
-from src.modules.models.deeponet.config.deeponet_config import DeepONetConfig
-from src.modules.models.deeponet.config import DataConfig, ExperimentConfig, TestConfig, TrainConfig
+from src.modules.models.config.don_config import DeepONetConfig
+from src.modules.models.deeponet.dataset.transform_config import DONTransformConfig
+from src.modules.models.deeponet.dataset.transform_config import DONTransformConfig
+from src.modules.models.config.don_config import DeepONetConfig
+from src.modules.models.config import DataConfig, ExperimentConfig, TestConfig, DONTrainConfig
 from src.modules.models.deeponet.training_strategies.config import PODConfig
 
 @dataclass
 class ValidatedConfig:
     data: 'DataConfig'
-    training: 'TrainConfig'
+    training: 'DONTrainConfig'
 
 
 class ConfigValidator:
@@ -25,10 +25,10 @@ class ConfigValidator:
 
         return ValidatedConfig(
             data=DataConfig(**data_params),
-            training=TrainConfig(**train_params)
+            training=DONTrainConfig(**train_params)
         )
 
-def validate_train_config(cfg: TrainConfig):
+def validate_train_config(cfg: DONTrainConfig):
     if cfg.device == "cpu" and cfg.precision == "float16":
         raise ValueError("float16 requires CUDA device")
 
@@ -47,7 +47,7 @@ def validate_train_config(cfg: TrainConfig):
 
 def validate_config_compatibility(
     data_cfg: DataConfig,
-    train_cfg: TrainConfig
+    train_cfg: DONTrainConfig
 ) -> None:
     """Ensure transforms align with other configs."""
     validate_feature_expansion(
@@ -63,7 +63,7 @@ def validate_config_compatibility(
 
 
 def validate_normalization(
-    transform_cfg: TransformConfig,
+    transform_cfg: DONTransformConfig,
     data_cfg: DataConfig
 ) -> None:
     """Validate required scaler parameters exist."""
@@ -98,7 +98,7 @@ def validate_normalization(
             raise ValueError(f"Missing '{data_cfg.targets[0]}_std' in scalers")
 
 
-def validate_feature_expansion(transform_cfg: TransformConfig,
+def validate_feature_expansion(transform_cfg: DONTransformConfig,
                                model_cfg: DeepONetConfig,
                                data_cfg: DataConfig) -> None:
     """

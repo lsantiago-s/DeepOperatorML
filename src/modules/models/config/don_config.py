@@ -1,22 +1,22 @@
 from __future__ import annotations
 import torch
-from dataclasses import dataclass, fields, is_dataclass
 from typing import Any, Type, Optional
-from src.modules.models.deeponet.components.branch.config import BranchConfig, BranchConfig
-from src.modules.models.deeponet.components.trunk.config import TrunkConfig, TrunkConfig
-from src.modules.models.deeponet.components.output_handler.config import OutputConfig
-from src.modules.models.deeponet.components.rescaling.config import RescalingConfig
-from src.modules.models.deeponet.components.bias.config import BiasConfig
-from src.modules.models.deeponet.training_strategies.config import StrategyConfig, VanillaConfig, TwoStepConfig, PODConfig
+from dataclasses import dataclass, fields, is_dataclass
+from src.modules.models.deeponet.components.bias.config import DONBiasConfig
+from src.modules.models.deeponet.components.rescaling.config import DONRescalingConfig
+from src.modules.models.deeponet.components.output_handler.config import DONOutputConfig
+from src.modules.models.deeponet.components.branch.config import DONBranchConfig, DONBranchConfig
+from src.modules.models.deeponet.components.trunk.config import DONTrunkConfig, DONTrunkConfig
+from src.modules.models.deeponet.training_strategies.config import DONStrategyConfig, VanillaConfig, TwoStepConfig, PODConfig
 
 @dataclass
 class DeepONetConfig:
-    branch: BranchConfig
-    trunk: TrunkConfig
-    bias: BiasConfig
-    output: OutputConfig
-    rescaling: RescalingConfig
-    strategy: StrategyConfig
+    branch: DONBranchConfig
+    trunk: DONTrunkConfig
+    bias: DONBiasConfig
+    output: DONOutputConfig
+    rescaling: DONRescalingConfig
+    strategy: DONStrategyConfig
 
     def __post_init__(self):
         if self.strategy is not None:
@@ -27,7 +27,7 @@ class DeepONetConfig:
         if isinstance(strategy_data, dict):
             name = strategy_data["name"]
 
-            strategy_class: Type[StrategyConfig] = {
+            strategy_class: Type[DONStrategyConfig] = {
                 "vanilla": VanillaConfig,
                 "pod": PODConfig,
                 "two_step": TwoStepConfig
@@ -55,7 +55,7 @@ class DeepONetConfig:
 
             if is_dataclass(field.type) and isinstance(value, dict):
                 converted[field.name] = field.type.from_dict(value)
-            elif (field.type is Optional[StrategyConfig] and isinstance(value, dict)):
+            elif (field.type is Optional[DONStrategyConfig] and isinstance(value, dict)):
                 converted[field.name] = cls._convert_strategy(value)
             else:
                 converted[field.name] = value

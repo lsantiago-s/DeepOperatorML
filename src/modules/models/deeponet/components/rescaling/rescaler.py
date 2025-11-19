@@ -1,8 +1,8 @@
 import torch
-from src.modules.models.deeponet.components.rescaling.config import RescalingConfig
+from src.modules.models.deeponet.components.rescaling.config import DONRescalingConfig
 
 class Rescaler(torch.nn.Module):
-    def __init__(self, config: RescalingConfig):
+    def __init__(self, config: DONRescalingConfig):
         super().__init__()
         self.scale = config.embedding_dimension ** config.exponent
 

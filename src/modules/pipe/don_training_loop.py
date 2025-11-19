@@ -8,7 +8,7 @@ from typing import Iterable, Optional
 from torch.utils.data import DataLoader
 from src.modules.models.deeponet.dataset.deeponet_sampler import DeepONetSampler
 from src.modules.pipe.history import HistoryStorer
-from src.modules.models.deeponet.training_strategies.base import TrainingStrategy
+from src.modules.models.deeponet.training_strategies.base import DONTrainingStrategy
 from src.modules.models.deeponet.deeponet import DeepONet
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ class DeepONetTrainingLoop:
     """Strategy‑aware training driver for *DeepONet*.
 
     The loop itself is deliberately thin: it orchestrates epochs, delegates
-    all model‑specific behaviour to the provided ``TrainingStrategy`` and keeps
+    all model‑specific behaviour to the provided ``DONTrainingStrategy`` and keeps
     a clean metric history through ``HistoryStorer``.
     """
 
@@ -28,7 +28,7 @@ class DeepONetTrainingLoop:
     def __init__(
         self,
         model: DeepONet,
-        strategy: TrainingStrategy,
+        strategy: DONTrainingStrategy,
         train_loader: DataLoader,
         sampler: DeepONetSampler,
         checkpoint_dir: str | Path,
@@ -39,7 +39,7 @@ class DeepONetTrainingLoop:
         # Core references --------------------------------------------------
         self.device: torch.device = torch.device(device)
         self.model: DeepONet = model.to(self.device)
-        self.strategy: TrainingStrategy = strategy
+        self.strategy: DONTrainingStrategy = strategy
         self.train_loader: DataLoader = train_loader
         self.val_loader: Optional[DataLoader] = val_loader
         self.sampler: DeepONetSampler = sampler
@@ -127,7 +127,10 @@ class DeepONetTrainingLoop:
             max_gradients = {}
             for name, param in self.model.named_parameters():
                 if param.grad is not None:
-                    max_gradients[name] = param.grad.max().item()
+                    if not param.grad.is_complex():
+                        max_gradients[name] = param.grad.max().item()
+                    else:
+                        max_gradients[name] = torch.max(torch.abs(param.grad)).item()
                 else:
                     max_gradients[name] = None
 
@@ -207,7 +210,13 @@ class DeepONetTrainingLoop:
 
                     if train:
                         self.optimizer.zero_grad(set_to_none=True)
-                        loss.backward()
+                        if loss.is_complex():
+
+                            loss_conj = loss.conj()
+
+                            torch.autograd.backward(loss_conj, grad_tensors=torch.tensor(1.0).to(loss_conj.device, dtype=loss_conj.dtype))
+                        else:
+                            loss.backward()
                         self.strategy.apply_gradient_constraints(self.model)
                         self.optimizer.step()
                         

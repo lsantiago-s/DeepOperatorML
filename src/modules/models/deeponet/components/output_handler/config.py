@@ -2,7 +2,7 @@ from typing import Literal
 from dataclasses import dataclass
 
 @dataclass
-class OutputConfig:
+class DONOutputConfig:
     handler_type: Literal["split_outputs", "shared_trunk", "shared_branch", "two_step_final"]
     num_channels: int
     dims_adjust: bool = True

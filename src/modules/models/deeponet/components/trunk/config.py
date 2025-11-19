@@ -3,12 +3,12 @@ import torch
 import re
 from dataclasses import dataclass
 from typing import Literal, Optional, Callable
-from src.modules.models.deeponet.dataset.transform_config import TransformConfig
+from src.modules.models.deeponet.dataset.transform_config import DONTransformConfig
 from src.modules.models.deeponet.components.registry import ComponentRegistry
 from src.modules.models.tools.activation_functions.activation_fns import ACTIVATION_MAP
 
 @dataclass
-class TrunkConfig:
+class DONTrunkConfig:
     architecture: Optional[Literal["resnet", "mlp", "chebyshev_kan", "pretrained", "precomputed"]]
     component_type: Literal["neural_trunk", "pod_trunk", "orthonormal_trunk"] = "neural_trunk"
     input_dim: Optional[int] = None
@@ -29,7 +29,7 @@ class TrunkConfig:
     dropout: Optional[float] = None
     ff_mult: Optional[int] = None
     # POD/Decomposed params
-    inner_config: Optional[TrunkConfig] = None
+    inner_config: Optional[DONTrunkConfig] = None
     T_matrix: Optional[torch.Tensor] = None
     num_channels: Optional[int] = None
     is_shared_trunk: Optional[bool] = None
@@ -38,8 +38,8 @@ class TrunkConfig:
     pod_basis_shape: Optional[torch.Size] = None
 
     @classmethod
-    def setup_for_training(cls, data_cfg: dict, train_cfg: dict) -> "TrunkConfig":
-        trunk_config = TrunkConfig(**train_cfg["trunk"])
+    def setup_for_training(cls, data_cfg: dict, train_cfg: dict) -> "DONTrunkConfig":
+        trunk_config = DONTrunkConfig(**train_cfg["trunk"])
         if trunk_config.activation is not None:
             trunk_config.activation = ACTIVATION_MAP[trunk_config.activation.lower(
             )]
@@ -51,8 +51,8 @@ class TrunkConfig:
         return trunk_config
 
     @classmethod
-    def setup_for_inference(cls, model_cfg_dict: dict, transform_cfg: TransformConfig) -> "TrunkConfig":
-        trunk_config = TrunkConfig(**model_cfg_dict["trunk"])
+    def setup_for_inference(cls, model_cfg_dict: dict, transform_cfg: DONTransformConfig) -> "DONTrunkConfig":
+        trunk_config = DONTrunkConfig(**model_cfg_dict["trunk"])
         if trunk_config.activation is not None:
             mask = re.sub(r'[^a-zA-Z0-9]', '', trunk_config.activation.lower(
             ))
@@ -67,7 +67,7 @@ class TrunkConfig:
         key = "embedding_dimension" if "embedding_dimension" in model_cfg_dict["rescaling"] else "num_basis_functions"
 
         if model_cfg_dict['strategy']['name'] == 'two_step':
-            trunk_config.inner_config = TrunkConfig(**model_cfg_dict["trunk"]["inner_config"])
+            trunk_config.inner_config = DONTrunkConfig(**model_cfg_dict["trunk"]["inner_config"])
             trunk_config.inner_config.num_channels = model_cfg_dict['output']['num_channels']
             if trunk_config.inner_config.activation is not None:
                 mask = re.sub(r'[^a-zA-Z0-9]', '', trunk_config.inner_config.activation.lower())
@@ -78,14 +78,14 @@ class TrunkConfig:
                 trunk_config.inner_config.is_shared_trunk = False
         return trunk_config
 
-class TrunkConfigValidator:
+class DONTrunkConfigValidator:
     @staticmethod
-    def validate(config: TrunkConfig):
+    def validate(config: DONTrunkConfig):
         if config.component_type == "orthonormal_trunk":
-            TrunkConfigValidator._validate_orthonormal(config)
+            DONTrunkConfigValidator._validate_orthonormal(config)
             return
         elif config.component_type == "pod_trunk":
-            TrunkConfigValidator._validate_pod(config)
+            DONTrunkConfigValidator._validate_pod(config)
             return
         try:
             _, required_params = ComponentRegistry.get(
@@ -106,7 +106,7 @@ class TrunkConfigValidator:
             raise ValueError("KAN requires degree >= 1")
 
     @staticmethod
-    def _validate_orthonormal(config: TrunkConfig):
+    def _validate_orthonormal(config: DONTrunkConfig):
         """Special validation for orthonormal trunk configuration"""
         errors = []
 
@@ -124,14 +124,14 @@ class TrunkConfigValidator:
 
         if hasattr(config, "inner_config") and config.inner_config is not None:
             try:
-                TrunkConfigValidator.validate(config.inner_config)
+                DONTrunkConfigValidator.validate(config.inner_config)
             except ValueError as e:
                 errors.append(f"Invalid inner trunk config: {str(e)}")
 
         if errors:
             raise ValueError(f"Orthonormal trunk errors: {', '.join(errors)}")
     @staticmethod
-    def _validate_pod(config: TrunkConfig):
+    def _validate_pod(config: DONTrunkConfig):
         """Special validation for POD trunk configuration"""
         errors = []
         pod_basis = config.pod_basis

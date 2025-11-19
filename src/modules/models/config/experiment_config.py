@@ -3,12 +3,12 @@ import torch
 from copy import deepcopy
 from typing import TYPE_CHECKING
 from dataclasses import dataclass, replace, asdict
-from src.modules.models.deeponet.config import PathConfig
-from src.modules.models.deeponet.training_strategies.config import StrategyConfig
-from src.modules.models.deeponet.dataset.transform_config import TransformConfig
-from src.modules.models.deeponet.config import TrainConfig, DataConfig
+from src.modules.models.config import PathConfig
+from src.modules.models.deeponet.training_strategies.config import DONStrategyConfig
+from src.modules.models.deeponet.dataset.transform_config import DONTransformConfig
+from src.modules.models.config import DONTrainConfig, DataConfig
 if TYPE_CHECKING:
-    from src.modules.models.deeponet.config import DeepONetConfig
+    from src.modules.models.config import DeepONetConfig
 
 @dataclass
 class ExperimentConfig:
@@ -19,11 +19,11 @@ class ExperimentConfig:
     device: str | torch.device
     precision: str
     model: DeepONetConfig
-    transforms: TransformConfig
-    strategy: StrategyConfig
+    transforms: DONTransformConfig
+    strategy: DONStrategyConfig
 
     @classmethod
-    def from_dataclasses(cls, data_cfg: DataConfig, train_cfg: TrainConfig, path_cfg: PathConfig):
+    def from_dataclasses(cls, data_cfg: DataConfig, train_cfg: DONTrainConfig, path_cfg: PathConfig):
 
         train_cfg.transforms.branch.original_dim = data_cfg.shapes[data_cfg.features[0]][1]
         train_cfg.transforms.trunk.original_dim = data_cfg.shapes[data_cfg.features[1]][1]
@@ -108,14 +108,16 @@ class ExperimentConfig:
         except KeyError:
             pass
 
-        updated_model_config = pod_updated_model_config if prev_strategy_config.name == 'pod' else two_step_updated_model_config
+        if prev_strategy_config.name != 'vanilla':
+            updated_model_config = pod_updated_model_config if prev_strategy_config.name == 'pod' else two_step_updated_model_config
+        else:
+            updated_model_config = prev_model_config
 
-        print(updated_model_config.branch.output_dim)
-        print(updated_model_config.trunk.output_dim)
         # print(updated_strategy.final_branch_config.inner_config.output_dim)
         # print(updated_strategy.final_trunk_config.inner_config.output_dim)
         
         final_config = replace(prev_config_copy,
                             model=updated_model_config,
                             strategy=updated_strategy_config)
+
         return final_config

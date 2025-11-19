@@ -3,9 +3,9 @@ import inspect
 from typing import TypeVar
 from src.modules.models.deeponet.components.bias import Bias
 from src.modules.models.deeponet.components.registry import ComponentRegistry
-from src.modules.models.deeponet.components.bias.config import BiasConfig, BiasConfigValidator
-from src.modules.models.deeponet.components.trunk.config import TrunkConfig, TrunkConfigValidator
-from src.modules.models.deeponet.components.branch.config import BranchConfig, BranchConfigValidator
+from src.modules.models.deeponet.components.bias.config import DONBiasConfig, DONBiasConfigValidator
+from src.modules.models.deeponet.components.trunk.config import DONTrunkConfig, DONTrunkConfigValidator
+from src.modules.models.deeponet.components.branch.config import DONBranchConfig, DONBranchConfigValidator
 from src.modules.models.deeponet.components.trunk import OrthonormalTrunk, PODTrunk
 from src.modules.models.deeponet.components.branch import OrthonormalBranch
 
@@ -13,8 +13,8 @@ T = TypeVar('T')
 
 class BiasFactory:
     @classmethod
-    def build(cls, config: BiasConfig) -> torch.nn.Module:
-        BiasConfigValidator.validate(config)
+    def build(cls, config: DONBiasConfig) -> torch.nn.Module:
+        DONBiasConfigValidator.validate(config)
         return Bias(
             num_channels=config.num_channels,
             precomputed_mean=config.precomputed_mean,
@@ -24,8 +24,8 @@ class BiasFactory:
 
 class BranchFactory:
     @classmethod
-    def build(cls, config: BranchConfig) -> torch.nn.Module:
-        BranchConfigValidator.validate(config)
+    def build(cls, config: DONBranchConfig) -> torch.nn.Module:
+        DONBranchConfigValidator.validate(config)
         if config.component_type == "orthonormal_branch":
             inner_branch = cls.build(config.inner_config)  # type: ignore
             coeff_tensor = torch.as_tensor(config.R_matrix)
@@ -44,7 +44,7 @@ class BranchFactory:
 
 class TrunkFactory:
     @classmethod
-    def build(cls, config: TrunkConfig) -> torch.nn.Module:
+    def build(cls, config: DONTrunkConfig) -> torch.nn.Module:
         if config.component_type == "orthonormal_trunk":
             inner_trunk = cls.build(config.inner_config)  # type: ignore
             basis_tensor = torch.as_tensor(config.T_matrix)
@@ -54,7 +54,7 @@ class TrunkFactory:
             basis = config.pod_basis
             return PODTrunk(pod_basis=basis)  # type: ignore
 
-        TrunkConfigValidator.validate(config)
+        DONTrunkConfigValidator.validate(config)
         component_class, _ = ComponentRegistry.get(
             component_type=config.component_type,
             architecture=config.architecture

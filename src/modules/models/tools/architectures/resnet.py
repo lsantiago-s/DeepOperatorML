@@ -86,11 +86,10 @@ class ResNet(torch.nn.Module):
         self.blocks = torch.nn.ModuleList()
         layers = [input_dim] + hidden_layers + [output_dim]
         n_blocks = len(layers) - 1
-
         dropout_rates = dropout_rates or [0.0] * n_blocks
         batch_normalization = batch_normalization or [False] * n_blocks
         layer_normalization = layer_normalization or [False] * n_blocks
-
+        
         _validate_len("dropout rates", dropout_rates, n_blocks)
         _validate_len("batch_normalization flags", batch_normalization, n_blocks)
         _validate_len("layer_normalization flags", layer_normalization, n_blocks)

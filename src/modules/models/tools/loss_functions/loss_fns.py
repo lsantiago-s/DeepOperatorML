@@ -7,6 +7,9 @@ def mse_loss(y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
     """Handles multi-channel outputs via mean over all dimensions"""
     return torch.mean((y_pred - y_true) ** 2)
 
+def mse_loss_complex(y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
+    """Handles multi-channel outputs via mean over all dimensions"""
+    return torch.mean(torch.abs(y_pred - y_true) ** 2)
 
 def rmse_loss(y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
     return torch.sqrt(mse_loss(y_pred, y_true))
@@ -239,7 +242,8 @@ LOSS_FUNCTIONS = {
     "mag_phase": mag_phase_loss,
     'huber': huber_loss,
     "mse_dissipative": mse_dissipative,
-    'ot': CombinedLoss(0.1, 'tensorized').loss
+    'ot': CombinedLoss(0.1, 'tensorized').loss,
+    "mse_complex": mse_loss_complex
 }
 
 
@@ -247,7 +251,6 @@ if __name__ == '__main__':
     i = torch.rand((100, 50, 3))
     o = torch.rand((100, 50, 3))
     i_stats, o_stats = cal_stats_l63(i, o)
-    print('o', o_stats.shape)
     loss_fn = CombinedLoss(0.01, 'tensorized').loss
     loss = loss_fn(i_stats, o_stats)
     print(loss)

@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass
-from src.modules.models.deeponet.config import DataConfig
+from src.modules.models.config import DataConfig
 
 @dataclass
 class PathConfig:

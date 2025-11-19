@@ -1,17 +1,19 @@
 from __future__ import annotations
 import torch
 import yaml
-from pathlib import Path
 from typing import Any
+from pathlib import Path
 from dataclasses import dataclass, replace
-from src.modules.models.deeponet.config.deeponet_config import DeepONetConfig
-from src.modules.models.deeponet.dataset.transform_config import TransformConfig
-from src.modules.models.deeponet.components.output_handler.config import OutputConfig
-from src.modules.models.deeponet.components.rescaling.config import RescalingConfig
-from src.modules.models.deeponet.components.bias.config import BiasConfig
-from src.modules.models.deeponet.components.branch.config import BranchConfig
-from src.modules.models.deeponet.components.trunk.config import TrunkConfig
-from src.modules.models.deeponet.training_strategies.config import StrategyConfig
+from src.modules.models.config.don_config import DeepONetConfig
+from src.modules.models.config.fno_config import FourierNeuralOperatorConfig
+from src.modules.models.deeponet.dataset.transform_config import DONTransformConfig
+from src.modules.models.fno.dataset.transform_config import FNOTransformConfig
+from src.modules.models.deeponet.components.output_handler.config import DONOutputConfig
+from src.modules.models.deeponet.components.rescaling.config import DONRescalingConfig
+from src.modules.models.deeponet.components.bias.config import DONBiasConfig
+from src.modules.models.deeponet.components.branch.config import DONBranchConfig
+from src.modules.models.deeponet.components.trunk.config import DONTrunkConfig
+from src.modules.models.deeponet.training_strategies.config import DONStrategyConfig
 
 @dataclass
 class TestConfig:
@@ -22,8 +24,8 @@ class TestConfig:
     output_path: Path
     experiment_version: str
     problem: str | None = None
-    model: DeepONetConfig | None = None
-    transforms: TransformConfig | None = None
+    model: DeepONetConfig | FourierNeuralOperatorConfig | None = None
+    transforms: DONTransformConfig | FNOTransformConfig | None = None
     metric: str | None = None
     checkpoint: dict | None = None
     config: dict[str, Any] | None = None
@@ -43,8 +45,8 @@ class TestConfig:
         )
 
     def with_experiment_data(self, exp_cfg_dict: dict[str, Any]):
-        def _create_transforms_config(cfg_dict: dict[str, Any]) -> TransformConfig:
-            return TransformConfig.from_exp_config(
+        def _create_transforms_config(cfg_dict: dict[str, Any]) -> DONTransformConfig:
+            return DONTransformConfig.from_exp_config(
                 branch_transforms=cfg_dict["branch"],
                 trunk_transforms=cfg_dict["trunk"],
                 target_transforms=cfg_dict["target"],
@@ -55,7 +57,7 @@ class TestConfig:
             exp_cfg_dict['transforms'])
         self.transforms = transforms_config
 
-        def _create_model_config(cfg_dict: dict[str, Any]) -> DeepONetConfig:
+        def _create_don_model_config(cfg_dict: dict[str, Any]) -> DeepONetConfig:
             if self.transforms is None:
                 raise ValueError("Transforms config not initialized")
             if self.transforms.branch.feature_expansion is None or self.transforms.trunk.feature_expansion is None:
@@ -63,16 +65,16 @@ class TestConfig:
             if self.transforms.branch.original_dim is None or self.transforms.trunk.original_dim is None:
                 raise ValueError("Missing original dims for initialization")
 
-            bias_config = BiasConfig.setup_for_inference(
+            bias_config = DONBiasConfig.setup_for_inference(
                 cfg_dict)
-            branch_config = BranchConfig.setup_for_inference(
+            branch_config = DONBranchConfig.setup_for_inference(
                 cfg_dict, self.transforms)
-            trunk_config = TrunkConfig.setup_for_inference(
+            trunk_config = DONTrunkConfig.setup_for_inference(
                 cfg_dict, self.transforms)
 
-            output_config = OutputConfig.setup_for_inference(cfg_dict)
-            rescaling_config = RescalingConfig.setup_for_inference(cfg_dict)
-            strategy_config = StrategyConfig.setup_for_inference(cfg_dict)
+            output_config = DONOutputConfig.setup_for_inference(cfg_dict)
+            rescaling_config = DONRescalingConfig.setup_for_inference(cfg_dict)
+            strategy_config = DONStrategyConfig.setup_for_inference(cfg_dict)
 
             return DeepONetConfig(
                 branch=branch_config,
@@ -83,7 +85,7 @@ class TestConfig:
                 strategy=strategy_config
             )
 
-        model_config = _create_model_config(exp_cfg_dict["model"])
+        model_config = _create_don_model_config(exp_cfg_dict["model"])
 
         return replace(
             self,

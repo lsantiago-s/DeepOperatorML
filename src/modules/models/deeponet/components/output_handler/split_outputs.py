@@ -3,17 +3,17 @@ from typing import TYPE_CHECKING
 import torch
 import logging
 from src.modules.models.deeponet.components.output_handler.protocol import OutputHandler
-from src.modules.models.deeponet.components.output_handler.config import OutputConfig
+from src.modules.models.deeponet.components.output_handler.config import DONOutputConfig
 from src.modules.models.deeponet.components.output_handler.registry import OutputRegistry
 if TYPE_CHECKING:
-    from src.modules.models.deeponet.config.deeponet_config import DeepONetConfig
+    from src.modules.models.config.don_config import DeepONetConfig
 
 logger = logging.getLogger(__name__)
 
 
 @OutputRegistry.register("split_outputs")
 class SplitOutputsHandler(OutputHandler):
-    def __init__(self, config: OutputConfig):
+    def __init__(self, config: DONOutputConfig):
         self.num_channels = config.num_channels
         self.dims_adjust = config.dims_adjust
 
