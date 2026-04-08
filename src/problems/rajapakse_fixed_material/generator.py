@@ -38,7 +38,9 @@ class RajapakseFixedMaterialGenerator(BaseProblemGenerator):
         e1 = self.config["E"] / (1 + self.config["nu"]) / \
             (1 - 2 * self.config["nu"])
         c44 = e1 * (1 - 2 * self.config["nu"]) / 2
-        omega = self.config["omega_min"] + np.random.rand(self.config["N"]) * (
+        seed = self.config.get("seed")
+        rng = np.random.default_rng(seed=seed)
+        omega = self.config["omega_min"] + rng.random(self.config["N"]) * (
             self.config["omega_max"] - self.config["omega_min"])
         delta = omega * self.config["r_source"] * \
             np.sqrt(self.config["dens"] / c44)
@@ -127,7 +129,14 @@ class RajapakseFixedMaterialGenerator(BaseProblemGenerator):
         logger.info(f"Runtime for integration: {duration:.3f} s\nData shapes:\n\t u:\t{delta.shape}\n\t g_u:\t{u.shape}\n\t r:\t{r_field.shape}\n\t z:\t{z_field.shape}\na0_min:\t\t\t{delta.min():.3f} \na0_max:\t\t\t{delta.max():.3f}\nr_min:\t\t\t{r_field.min():.3f} \nr_max:\t\t\t{r_field.max():.3f} \nz_min:\t\t\t{z_field.min():.3f} \nz_max:\t\t\t{z_field.max():.3f}\na0_mean:\t\t\t{delta.mean():.3f} \na0_std:\t\t\t{delta.std():.3f}\nr_mean:\t\t\t{r_field.mean():.3f} \nr_std:\t\t\t{r_field.std():.3f} \nz_mean:\t\t\t{z_field.mean():.3f} \nz_std:\t\t\t{z_field.std():.3f}")
 
         metadata = {
-            "runtime_ms": f"{duration:.3f}",
+            "runtime_s": float(duration),
+            "runtime_ms": float(duration * 1e3),
+            "timing_breakdown": {
+                "integration_total_s": float(duration),
+                "integration_per_sample_s": float(duration / max(len(delta), 1)),
+                "integration_calls_total": int(self.config["N"] * self.config["N_r"] * self.config["N_z"]),
+                "integration_per_call_s": float(duration / max(self.config["N"] * self.config["N_r"] * self.config["N_z"], 1)),
+            },
             "parameters": {
                 # .item() for scalar array
                 "delta": {
@@ -162,7 +171,32 @@ class RajapakseFixedMaterialGenerator(BaseProblemGenerator):
                     "mean": f"{u.mean():.4E}",
                     "std": f"{u.std():.4E}"
                 }
-            }
+            },
+            "paper_alignment": {
+                "reference": "Rajapakse & Wang (1993) - dynamic Green's functions in transversely isotropic half-space",
+                "formulation_mode": "fixed isotropic material in dimensionless dynamic frequency delta",
+                "material_parameters": {
+                    "E_pa": float(self.config["E"]),
+                    "nu": float(self.config["nu"]),
+                    "density_kg_m3": float(self.config["dens"]),
+                    "damping": float(self.config["damp"]),
+                },
+                "dimensionless_stiffness_ratios": {
+                    "c11_over_c44": float(2.0 * (1.0 - self.config["nu"]) / (1.0 - 2.0 * self.config["nu"])),
+                    "c12_over_c44": float(2.0 * self.config["nu"] / (1.0 - 2.0 * self.config["nu"])),
+                    "c13_over_c44": float(2.0 * self.config["nu"] / (1.0 - 2.0 * self.config["nu"])),
+                    "c33_over_c44": float(2.0 * (1.0 - self.config["nu"]) / (1.0 - 2.0 * self.config["nu"])),
+                    "c44_over_c44": 1.0,
+                },
+                "load_setup": {
+                    "component": int(self.config["component"]),
+                    "loadtype": int(self.config["loadtype"]),
+                    "bvptype": int(self.config["bvptype"]),
+                    "r_source_m": float(self.config["r_source"]),
+                    "z_source_m": float(self.config["z_source"]),
+                    "l_source_m": float(self.config["l_source"]),
+                },
+            },
         }
 
         path = Path(self.config["data_filename"])

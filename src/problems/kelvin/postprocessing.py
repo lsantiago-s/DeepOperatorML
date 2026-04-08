@@ -34,6 +34,9 @@ def get_coordinates(data_cfg: DataConfig) -> dict[str, np.ndarray]:
     return coordinates
 
 def format_target(displacements: np.ndarray, data_cfg: DataConfig) -> np.ndarray:
+    if len(displacements) > len(data_cfg.split_indices['xb_test']):
+        test_indices = data_cfg.split_indices['xb_test']
+        displacements = displacements[test_indices]
     with open(data_cfg.raw_metadata_path, 'r') as file:
         raw_metadata = yaml.safe_load(file)
 
@@ -48,7 +51,7 @@ def format_target(displacements: np.ndarray, data_cfg: DataConfig) -> np.ndarray
 
 def reshape_coefficients(branch_out: np.ndarray, data_cfg: DataConfig, test_cfg: TestConfig) -> np.ndarray:
     return branch_out.reshape(
-        int(data_cfg.shapes[data_cfg.targets[0]][0]*data_cfg.split_ratios[-1]),
+        data_cfg.data[data_cfg.targets[0]][data_cfg.split_indices['xb_test']].shape[0],
         -1,
         test_cfg.model.rescaling.embedding_dimension,  # type: ignore
     )

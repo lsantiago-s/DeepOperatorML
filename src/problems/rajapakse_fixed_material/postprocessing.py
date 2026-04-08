@@ -31,6 +31,9 @@ def get_coordinates(data_cfg: DataConfig) -> dict[str, np.ndarray]:
     return coordinates
 
 def format_target(displacements: np.ndarray, data_cfg: DataConfig) -> np.ndarray:
+    if len(displacements) > len(data_cfg.split_indices['xb_test']):
+        test_indices = data_cfg.split_indices['xb_test']
+        displacements = displacements[test_indices]
     with open(data_cfg.raw_metadata_path, 'r') as file:
         raw_metadata = yaml.safe_load(file)
     displacements = displacements.reshape(

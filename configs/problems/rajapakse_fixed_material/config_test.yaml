@@ -17,3 +17,9 @@ plot_coefficients_mean: true
 # Plot every X percentile (e.g every 10th percentile of the input functions)
 percentiles: 10
 vectors_to_highlight: 3
+
+# Additional report outputs (saved automatically by problem_dependent_visualization):
+# - metrics/baseline_performance_report.yaml
+# - metrics/baseline_performance_table.csv
+# - metrics/timing_comparison_report.yaml
+# - plots/performance_tracking/*.png

@@ -6,7 +6,7 @@ import numpy as np
 from typing import Any
 from pathlib import Path
 from src.problems.base_generator import BaseProblemGenerator
-from src.problems.kelvin.sampling_functions import mesh_rescaling, numpy_random_open_0_1
+from src.problems.kelvin.sampling_functions import mesh_rescaling
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,8 @@ class KelvinProblemGenerator(BaseProblemGenerator):
         else:
             self.config_path = None
             self.config = config
+        self.seed = self.config.get("seed")
+        self.rng = np.random.default_rng(seed=self.seed)
 
     def load_config(self):
         if self.config_path:
@@ -33,11 +35,11 @@ class KelvinProblemGenerator(BaseProblemGenerator):
             array: Shape (N, 3) with columns [F, mu, nu], where N is the number of samples.
         """
 
-        log_mu_samples = self.config["mu_min"] + numpy_random_open_0_1(
+        log_mu_samples = self.config["mu_min"] + self.rng.random(
             self.config["N"]) * (self.config["mu_max"] - self.config["mu_min"])
-        F_samples = -np.array(10**self.config["F"])
+        F_samples = -float(10**self.config["F"])
         mu_samples = 10**log_mu_samples
-        nu_samples = numpy_random_open_0_1(
+        nu_samples = self.rng.random(
             self.config["N"]) * (self.config["nu_max"] - self.config["nu_min"])
         return F_samples, mu_samples, nu_samples
 
@@ -118,7 +120,7 @@ class KelvinProblemGenerator(BaseProblemGenerator):
         u = const[..., None] * (term1 + term2)
 
         end = time.perf_counter_ns()
-        duration = (end - start) / 1e6
+        duration = (end - start) / 1e9
         return u, duration
 
     def generate(self):
@@ -140,14 +142,21 @@ class KelvinProblemGenerator(BaseProblemGenerator):
         scaler_parameter = self.config["scaler"]
 
         logger.info(
-            f"Runtime for computing Kelvin solution: {duration:.3f} ms\nData shapes:\nInput functions (F, mu, nu): {F.shape}, {mu.shape}, {nu.shape}\nDisplacements u: {displacements.shape}\nx: {x_field.shape}, y: {y_field.shape}, z: {z_field.shape}\nLoad magnitude = {F:.3E}\nShear modulus min = {mu.min():.3E}, max = {mu.max():.3E}\nPoisson's ratio min = {nu.min():.3f}, max = {nu.max():.3f}\nx: min = {x_field.min():3f}, max = {x_field.max():.3f}\nx: mean = {x_field.mean():3f}, std = {x_field.std():.3f}\ny: min = {y_field.min():3f}, max = {y_field.max():.3f}\ny: mean = {y_field.mean():3f}, std = {y_field.std():.3f}\nz: min = {z_field.min():3f}, max = {z_field.max():.3f}\nz: mean = {z_field.mean():3f}, std = {z_field.std():.3f}\ng_u: min = {displacements.min():3f}, max = {displacements.max():.3f}\ng_u: mean = {displacements.mean():3f}, std = {displacements.std():.3f}\n scaling parameter = {scaler_parameter:.3f}")
+            f"Runtime for computing Kelvin solution: {duration*1e3:.3f} ms\nData shapes:\nInput functions (F, mu, nu): scalar, {mu.shape}, {nu.shape}\nDisplacements u: {displacements.shape}\nx: {x_field.shape}, y: {y_field.shape}, z: {z_field.shape}\nLoad magnitude = {F:.3E}\nShear modulus min = {mu.min():.3E}, max = {mu.max():.3E}\nPoisson's ratio min = {nu.min():.3f}, max = {nu.max():.3f}\nx: min = {x_field.min():3f}, max = {x_field.max():.3f}\nx: mean = {x_field.mean():3f}, std = {x_field.std():.3f}\ny: min = {y_field.min():3f}, max = {y_field.max():.3f}\ny: mean = {y_field.mean():3f}, std = {y_field.std():.3f}\nz: min = {z_field.min():3f}, max = {z_field.max():.3f}\nz: mean = {z_field.mean():3f}, std = {z_field.std():.3f}\ng_u: min = {displacements.min():3f}, max = {displacements.max():.3f}\ng_u: mean = {displacements.mean():3f}, std = {displacements.std():.3f}\n scaling parameter = {scaler_parameter:.3f}")
 
         # --- Metadata Collection ---
         metadata = {
-            "runtime_ms": f"{duration:.3f}",
+            "runtime_s": float(duration),
+            "runtime_ms": float(duration * 1e3),
+            "timing_breakdown": {
+                "direct_solver_total_s": float(duration),
+                "direct_solver_per_sample_s": float(duration / max(self.config["N"], 1)),
+                "solver_kind": "kelvin_closed_form",
+                "grid_points_per_sample": int(self.config["N_x"] * self.config["N_y"] * self.config["N_z"]),
+            },
             "parameters": {
                 # .item() for scalar array
-                "load_magnitude": f"{F.item():.3E}" if F.size == 1 else "N/A",
+                "load_magnitude": f"{float(F):.3E}",
                 "shear_modulus": {
                     "shape": [i for i in mu.shape],
                     "min":  f"{mu.min():.3E}",
@@ -195,13 +204,21 @@ class KelvinProblemGenerator(BaseProblemGenerator):
                     "mean": ', '.join([f'{i:.4E}' for i in  displacements.mean(axis=(0, 1, 2, 3))]),
                     "std":  ', '.join([f'{i:.4E}' for i in  displacements.std(axis=(0, 1, 2, 3))])
                 }
-            }
+            },
+            "paper_alignment": {
+                "reference": "Kelvin fundamental solution for infinite isotropic elastic medium",
+                "formulation_mode": "closed-form displacement field with varying (mu, nu)",
+                "load_setup": {
+                    "load_direction": str(self.config["load_direction"]),
+                    "load_magnitude_N": float(F),
+                },
+            },
         }
         path = Path(self.config["data_filename"])
         if path.parent:
             path.parent.mkdir(parents=True, exist_ok=True)
 
-        np.savez(path, mu=mu, nu=nu, x=x_field, y=y_field,
+        np.savez(path, F=F, mu=mu, nu=nu, x=x_field, y=y_field,
                  z=z_field, g_u=displacements, c=scaler_parameter)
 
         metadata_path = path.with_suffix('.yaml')  # Changes .npz to .yaml
