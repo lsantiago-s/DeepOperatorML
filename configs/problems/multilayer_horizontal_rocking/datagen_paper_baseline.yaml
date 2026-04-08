@@ -1,0 +1,48 @@
+data_filename: ./data/raw/multilayer_horizontal_rocking/multilayer_horizontal_rocking_paper_baseline_v1.npz
+executable_path: ./src/problems/multilayer_horizontal_rocking/libs/multilayer.exe
+
+seed: 42
+num_samples: 120
+
+# Paper baseline cases A/B/C (two layers + half-space)
+N: 2
+Nload: 1
+B: 0.0
+M: 20
+receiver_interface: 1
+
+codes: [1, 1, 1, 1]
+outputfilename: doesntmatter
+
+omega:
+  # Paper uses normalized a0 in [0,4].
+  # The solver has 1/omega terms, so we avoid exact zero and use 0.001.
+  min: 0.001
+  max: 4.0
+
+sampling:
+  mode: paper_case
+
+  # Kept for compatibility with random mode; ignored by paper_case.
+  c11: [2.0, 6.0]
+  c12: [0.5, 3.0]
+  c13: [0.5, 3.0]
+  c33: [2.0, 6.0]
+  c44: [0.8, 2.5]
+  eta: [0.005, 0.10]
+  rho: [0.8, 2.5]
+  h: [0.2, 1.0]
+  semi_space_h: 0.0
+
+  paper_cases: [A, B, C]
+  paper_case_probabilities: [0.3333333333, 0.3333333333, 0.3333333334]
+
+  # Set to zero to match paper tabulated materials exactly.
+  paper_c_jitter_rel: 0.0
+  paper_eta_jitter_abs: 0.0
+  paper_rho_jitter_abs: 0.0
+  paper_h_jitter_abs: 0.0
+
+  max_tries_per_layer: 1000
+
+solver_timeout_seconds: 300

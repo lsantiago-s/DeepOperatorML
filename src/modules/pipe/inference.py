@@ -76,7 +76,6 @@ def inference(test_cfg: TestConfig, data_cfg: DataConfig):
     
     for i, _ in enumerate(abs_error):
         if test_cfg.transforms is not None:
-            print(i, data_cfg.targets_labels)
             errors['Physical Error'][data_cfg.targets_labels[i]] = (abs_error / norm_truth)[i]
         else:
             errors['Normalized Error'][data_cfg.targets_labels[i]] = (abs_error / norm_truth)[i]

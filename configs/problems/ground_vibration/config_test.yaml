@@ -11,6 +11,9 @@ plot_plane: true
 plot_basis: true
 plot_coefficients: true
 plot_coefficients_mean: true
+plot_operator_responses: true
+operator_response_samples: 3
+plot_reference_parameter: "$\\omega$"
 
 # Plot every X percentile (e.g every 10th percentile of the input functions)
 percentiles: 3

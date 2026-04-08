@@ -1,0 +1,52 @@
+data_filename: ./data/raw/multilayer_horizontal_rocking/multilayer_horizontal_rocking_v1.npz
+executable_path: ./src/problems/multilayer_horizontal_rocking/libs/multilayer.exe
+
+seed: 42
+num_samples: 20
+
+# Number of layers (solver reads N+1 rows including semi-space).
+N: 3
+Nload: 1
+B: 0.0
+M: 4
+receiver_interface: 1
+
+# Legacy Fortran INPUT has four CODE flags; current solver output includes
+# URFx, UZFx, URMy, UZMy and the added UZZ channel.
+codes: [1, 1, 1, 1]
+outputfilename: doesntmatter
+
+omega:
+  min: 0.001
+  max: 4.01
+
+sampling:
+  # 'random' (default): independent uniform random sampling by layer.
+  # 'paper_case': sample deterministic layered cases A/B/C from Labaki et al. (2014).
+  mode: random
+
+  # Transversely isotropic stiffness-like ranges.
+  c11: [2.0, 6.0]
+  c12: [0.5, 3.0]
+  c13: [0.5, 3.0]
+  c33: [2.0, 6.0]
+  c44: [0.8, 2.5]
+
+  # Damping, density and thickness.
+  eta: [0.005, 0.10]
+  rho: [0.8, 2.5]
+  h: [0.2, 1.0]
+
+  # Dummy thickness for the semi-space row (last row).
+  semi_space_h: 0.0
+  max_tries_per_layer: 1000
+
+  # Used only when mode=paper_case.
+  paper_cases: [A, B, C]
+  paper_case_probabilities: [0.3333333333, 0.3333333333, 0.3333333334]
+  paper_c_jitter_rel: 0.0
+  paper_eta_jitter_abs: 0.0
+  paper_rho_jitter_abs: 0.0
+  paper_h_jitter_abs: 0.0
+
+solver_timeout_seconds: 300

@@ -1,0 +1,48 @@
+# ---------------------- Location of raw data ----------------
+raw_data_path: ./data/raw/multilayer_horizontal_rocking/multilayer_horizontal_rocking_v1.npz
+
+# ------------------------- Dataset parameters ----------------
+problem: multilayer_horizontal_rocking
+splitting:
+  ratios: [0.8, 0.1, 0.1]
+  seed: 42
+
+data_labels:
+  features: [xb, xt]
+  targets: [g_u]
+
+# The multilayer preprocessing uses the pre-assembled branch matrix ('xb').
+input_function_keys:
+  - xb
+
+input_function_labels:
+  - "$\\mathbf{p}$"
+
+coordinate_keys:
+  - xt
+
+output_keys:
+  - re_urfx
+  - re_uzfx
+  - re_urmy
+  - re_uzmy
+  - re_uzz
+  - im_urfx
+  - im_uzfx
+  - im_urmy
+  - im_uzmy
+  - im_uzz
+
+output_labels:
+  - "$\\Re(u_{r}^{Fx})$"
+  - "$\\Re(u_{z}^{Fx})$"
+  - "$\\Re(u_{r}^{My})$"
+  - "$\\Re(u_{z}^{My})$"
+  - "$\\Re(u_{z}^{Fz})$"
+  - "$\\Im(u_{r}^{Fx})$"
+  - "$\\Im(u_{z}^{Fx})$"
+  - "$\\Im(u_{r}^{My})$"
+  - "$\\Im(u_{z}^{My})$"
+  - "$\\Im(u_{z}^{Fz})$"
+
+var_share: 0.95

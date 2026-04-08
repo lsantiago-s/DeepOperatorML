@@ -60,8 +60,19 @@ def preprocess_raw_data(raw_npz_filename: str,
         if k in data:
             branch_input.append(data[k])
     branch_input = np.array(branch_input).T
-    vec = data[coordinate_keys[0]][:, 0], data[coordinate_keys[0]][:, 1]
-    trunk_input = format_to_don(vec)
+
+    coord_raw = np.asarray(data[coordinate_keys[0]])
+    if coord_raw.ndim == 1:
+        coord_vec = coord_raw
+    elif coord_raw.ndim == 2:
+        # Legacy datasets stored x as a mesh-like matrix.
+        coord_vec = np.asarray(coord_raw[:, 0])
+    else:
+        raise ValueError(
+            f"Unsupported coordinate array shape for '{coordinate_keys[0]}': {coord_raw.shape}"
+        )
+
+    trunk_input = format_to_don((coord_vec, coord_vec))
 
     features = {
         processed_dataset_keys['features'][0]: branch_input,

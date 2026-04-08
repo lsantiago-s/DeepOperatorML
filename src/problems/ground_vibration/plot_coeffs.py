@@ -53,9 +53,7 @@ def plot_coefficients_mean(
             ax_inset = ax[ch].inset_axes([pos[0], pos[1], 0.16, 0.16])
             vector_channel = vectors[index][ch] if n_basis > 1 else vectors[index][0]
             vector_channel = -vector_channel if coefficients_mean_for_i_channel[index] < 0 else vector_channel
-            print(vector_channel)
-            quit()
-            vector_data = np.flipud(np.transpose(vector_channel, (1, 0)))
+            vector_data = np.abs(np.flipud(np.transpose(vector_channel, (1, 0))))
             ax_inset.imshow(vector_data, origin='lower')
             ax_inset.set_title(r'$i$'+f'={index + 1}', fontsize=14)
             ax_inset.set_xticklabels([])
