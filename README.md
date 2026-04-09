@@ -35,6 +35,8 @@ Optional explicit datagen config:
 python3 gen_data.py --problem <problem_name> --config <datagen_yaml>
 ```
 
+When a problem provides dataset plotting support, `gen_data.py` also writes sanity-check `.png` plots next to the generated raw dataset file.
+
 ### 2) Preprocess
 
 ```bash
@@ -84,6 +86,24 @@ python3 main.py --problem rajapakse_fixed_material --test
 ### ground_vibration
 
 Datagen uses externally provided matrices/parameters configured in `configs/problems/ground_vibration/datagen.yaml`.
+The learned operator is the full surface influence matrix map
+`(c11, c13, c33, c44, rho, eta, a0) -> U`, where
+`a0 = omega b / cS` and `cS = sqrt(c44 / rho)`.
+
+If the external `params_array.csv` still stores `omega` instead of `a0`,
+the generator derives `a0` automatically using `strip_half_width`.
+
+To create the external CSV/JSON bundle expected by `gen_data.py` on Linux
+without MATLAB, use:
+
+```bash
+./.venv/bin/python scripts/ground_vibration/generate_external_dataset.py \
+  --out-dir ./data/raw/ground_vibration/influence_dataset_N100_samples100_csv \
+  --n-samples 100 \
+  --n-points 100 \
+  --half-span 2.0 \
+  --damping 0.01
+```
 
 ```bash
 python3 gen_data.py --problem ground_vibration

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from src.modules.models.config.train_config import TrainConfig
 from src.modules.models.config.data_config import DataConfig
 from src.modules.models.config.don_config import DeepONetConfig
+from src.modules.models.config.wandb_config import WandbConfig
 from src.modules.models.deeponet.dataset.transform_config import DONTransformConfig
 from src.modules.models.tools.optimizers.config import OptimizerSpec
 from src.modules.models.deeponet.components.output_handler.config import DONOutputConfig
@@ -29,6 +30,7 @@ class DONTrainConfig(TrainConfig):
     strategy: dict
     rescaling: dict
     pod_data: dict[str, torch.Tensor]
+    wandb: WandbConfig
 
     @classmethod
     def from_config_files(cls, exp_cfg_path: str, train_cfg_path: str, data_cfg: DataConfig):
@@ -108,6 +110,8 @@ class DONTrainConfig(TrainConfig):
             dtype=dtype
         )
 
+        wandb_config = WandbConfig.from_dict(train_cfg.get("wandb"))
+
         return cls(
             precision=dtype,
             device=device,
@@ -119,5 +123,6 @@ class DONTrainConfig(TrainConfig):
             transforms=transform_config,
             strategy=strategy_config,
             rescaling=train_cfg['rescaling'],
-            pod_data=pod_data
+            pod_data=pod_data,
+            wandb=wandb_config,
         )

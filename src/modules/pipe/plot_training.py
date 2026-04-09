@@ -7,7 +7,9 @@ from matplotlib.figure import Figure
 import numpy as np
 
 plt.rc('font', family='serif', size=15)
-plt.rc('text', usetex=True)
+# Use Matplotlib mathtext so training-history plots do not depend on a system
+# LaTeX installation being present on the execution environment.
+plt.rc('text', usetex=False)
 plt.rc('axes', labelsize=14)
 plt.rc('legend', fontsize=12)
 

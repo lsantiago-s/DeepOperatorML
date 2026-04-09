@@ -36,6 +36,18 @@ Multilayer benchmark run (paper baseline from manifest):
 scripts/hpc/coaraci/submit_pipeline.sh --queue gpu-x --account <project_account> --problem multilayer_horizontal_rocking
 ```
 
+Ground-vibration benchmark run:
+
+```bash
+scripts/hpc/coaraci/submit_pipeline.sh --queue gpu-x --account <project_account> --problem ground_vibration
+```
+
+When the external ground-vibration CSV bundle is missing, the benchmark
+pipeline now generates it automatically on the cluster before calling
+`gen_data.py`. For `ground_vibration` with `--stage gen` or `--stage all`,
+`submit_pipeline.sh` now defaults to `--cpus-per-task 16` unless you
+override it explicitly.
+
 Direct train/test for multilayer:
 
 ```bash

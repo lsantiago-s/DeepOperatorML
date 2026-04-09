@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 from matplotlib.ticker import PercentFormatter
 from matplotlib.figure import Figure
+from src.problems.plotting_compat import configure_matplotlib_text
 
 def format_param(param: list, param_keys: list[str]):
     if not isinstance(param, float) and len(param_keys) == len(param):
@@ -12,12 +13,13 @@ def format_param(param: list, param_keys: list[str]):
     else:
         return f"{param:.0E}"
 
-plt.rc('font', family='serif', size=18)
-plt.rc('text', usetex=True)
-plt.rc('axes', labelsize=18)
-plt.rc('legend', fontsize=12)
 cmap = plt.get_cmap('viridis') # # tried: 'RdBu'
-plt.rc('image', cmap=cmap.name)
+configure_matplotlib_text(
+    font_size=18,
+    axes_labelsize=18,
+    legend_fontsize=12,
+    cmap_name=cmap.name,
+)
 # matplotlib.rcParams['text.latex.preamble'] = r'\math'
 
 def plot_2D_field(

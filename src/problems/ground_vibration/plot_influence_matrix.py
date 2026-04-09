@@ -3,15 +3,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 from matplotlib.figure import Figure
+from src.problems.plotting_compat import configure_matplotlib_text
 
 def _format_param_map(param_map: dict[str, float]) -> str:
     return ", ".join([f"{k}={v:.2E}" for k, v in param_map.items()])
 
-plt.rc('font', family='serif', size=18)
-plt.rc('text', usetex=True)
-plt.rc('axes', labelsize=18)
-plt.rc('legend', fontsize=12)
-plt.rc('image', cmap=plt.get_cmap('RdBu').name)
+configure_matplotlib_text(
+    font_size=18,
+    axes_labelsize=18,
+    legend_fontsize=12,
+    cmap_name=plt.get_cmap('RdBu').name,
+)
 
 def plot_influence_matrix(
         U_true: np.ndarray,

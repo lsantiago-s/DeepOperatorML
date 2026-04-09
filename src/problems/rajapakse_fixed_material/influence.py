@@ -1,6 +1,61 @@
 import platform
+import os
+from functools import lru_cache
 from pathlib import Path
 from ctypes import CDLL, c_double, c_long, POINTER, byref
+
+
+@lru_cache(maxsize=1)
+def load_native_library():
+    current_dir = Path(__file__).parent
+    system = platform.system()
+    override_path = os.environ.get("RAJAPAKSE_AXSGRSCE_LIB")
+
+    if override_path:
+        lib_path = Path(override_path).expanduser().resolve()
+        lib_name = lib_path.name
+    else:
+        if system == 'Windows':
+            lib_name = 'axsgrsce.dll'
+        elif system == 'Darwin':
+            lib_name = 'axsgrsce.dylib'
+        elif system == 'Linux':
+            lib_name = 'axsgrsce.so'
+        else:
+            raise OSError('Unsupported operating system')
+
+        lib_path = current_dir / 'libs' / lib_name
+
+    if not lib_path.exists():
+        raise FileNotFoundError(f"Library {lib_name} not found at {lib_path}")
+
+    try:
+        lib = CDLL(lib_path)
+    except OSError as exc:
+        libc_name, libc_version = platform.libc_ver()
+        runtime_desc = f"{system} with {libc_name or 'libc'} {libc_version or 'unknown'}"
+        raise RuntimeError(
+            "Failed to load the Rajapakse native library.\n"
+            f"Library: {lib_path}\n"
+            f"Runtime: {runtime_desc}\n"
+            f"Loader error: {exc}\n"
+            "This usually means the bundled shared library was built for a different system "
+            "or glibc version than the current machine. Provide a compatible "
+            "`axsgrsce.so` for this cluster, rebuild the library on a matching Linux environment, "
+            "or set RAJAPAKSE_AXSGRSCE_LIB to a compatible shared library path."
+        ) from exc
+
+    lib.axsanisgreen.argtypes = [
+        POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double),
+        POINTER(c_double), POINTER(c_double),
+        POINTER(c_double), POINTER(c_double),
+        POINTER(c_double), POINTER(c_double), POINTER(c_double),
+        POINTER(c_double),
+        POINTER(c_long), POINTER(c_long), POINTER(c_long),
+        POINTER(c_double), POINTER(c_double)
+    ]
+    lib.axsanisgreen.restype = None
+    return lib
 
 def influence(c11_val, c12_val, c13_val, c33_val, c44_val,
                dens_val, damp_val,
@@ -8,36 +63,7 @@ def influence(c11_val, c12_val, c13_val, c33_val, c44_val,
                z_fonte_val, r_fonte_val, l_fonte_val,
                freq_val,
                bvptype_val, loadtype_val, component_val):
-    
-    current_dir = Path(__file__).parent
-    system = platform.system()
-
-    if system == 'Windows':
-        lib_name = 'axsgrsce.dll'
-    elif system == 'Darwin':
-        lib_name = 'axsgrsce.dylib'
-    elif system == 'Linux':
-        lib_name = 'axsgrsce.so'
-    else:
-        raise OSError('Unsupported operating system')
-    
-    lib_path = current_dir / 'libs' / lib_name
-    
-    if not lib_path.exists():
-        raise FileNotFoundError(f"Library {lib_name} not found at {lib_path}")
-
-    lib = CDLL(lib_path)
-
-    lib.axsanisgreen.argtypes = [
-        POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double), #c11,c12,c13,c33,c44
-        POINTER(c_double), POINTER(c_double), #dens, damp
-        POINTER(c_double), POINTER(c_double), #r, z
-        POINTER(c_double), POINTER(c_double), POINTER(c_double),  # h, loadr, loadh
-        POINTER(c_double), #omega
-        POINTER(c_long), POINTER(c_long), POINTER(c_long), #bvptype_val, loadtype_val, component_val
-        POINTER(c_double), POINTER(c_double) # outputs: resultr and resulti
-    ]
-    lib.axsanisgreen.restype = None
+    lib = load_native_library()
 
     c11 = c_double(c11_val)
     c12 = c_double(c12_val)

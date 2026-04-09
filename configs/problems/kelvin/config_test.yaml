@@ -1,23 +1,11 @@
 precision: float32
 device: cpu
-
-# Location of dataset to test
-experiment_version:  2025-07-31_12-10-32
-# Location of outputs (data, metrics) - Set this if testing a pretrained model
+experiment_version: 2026-04-09_01-14-06
 output_path: ./output
 processed_data_path: ./data/processed
-
 plot_plane: true
 plot_basis: true
 plot_coefficients: true
 plot_coefficients_mean: false
-
-# Plot every X percentile (e.g every 10th percentile of the input functions)
 percentiles: 3
 vectors_to_highlight: 3
-
-# Additional report outputs (saved automatically by problem_dependent_visualization):
-# - metrics/baseline_performance_report.yaml
-# - metrics/baseline_performance_table.csv
-# - metrics/timing_comparison_report.yaml
-# - plots/performance_tracking/*.png

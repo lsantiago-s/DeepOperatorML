@@ -59,6 +59,20 @@ problems:
 
   ground_vibration:
     enabled: true
+    skip_if_missing_datagen_inputs: true
+    external_datagen_command:
+      - python3
+      - scripts/ground_vibration/generate_external_dataset.py
+      - --out-dir
+      - ./data/raw/ground_vibration/influence_dataset_N100_samples100_csv
+      - --n-samples
+      - "100"
+      - --n-points
+      - "100"
+      - --half-span
+      - "2.0"
+      - --damping
+      - "0.01"
     datagen_config: ./configs/problems/ground_vibration/datagen.yaml
     preprocessing_config: ./configs/problems/ground_vibration/config_preprocessing.yaml
     experiment_config: ./configs/problems/ground_vibration/config_experiment.yaml

@@ -17,6 +17,7 @@ TRAIN_CONFIG="./configs/training/config_don_train.yaml"
 EXPERIMENT_CONFIG=""
 TEST_CONFIG=""
 CPUS_PER_TASK="1"
+NTASKS_PER_NODE=""
 GPUS="3"
 SKIP_LIMIT_CHECK="0"
 DRY_RUN="0"
@@ -37,6 +38,7 @@ Options:
   --experiment-config <path>         Experiment config path (default by problem)
   --test-config <path>               Test config path (default by problem)
   --cpus-per-task <int>              CPUs per task (default: 1)
+  --ntasks-per-node <int>            Tasks per node (default: 1 on gpu-x, queue profile otherwise)
   --gpus <int>                       GPUs for gpu-x queue (default: 3)
   --skip-limit-check                 Skip per-queue active-job limit check
   --dry-run                          Print sbatch command and generated job script
@@ -56,6 +58,7 @@ while [[ $# -gt 0 ]]; do
     --experiment-config) EXPERIMENT_CONFIG="$2"; shift 2 ;;
     --test-config) TEST_CONFIG="$2"; shift 2 ;;
     --cpus-per-task) CPUS_PER_TASK="$2"; shift 2 ;;
+    --ntasks-per-node) NTASKS_PER_NODE="$2"; shift 2 ;;
     --gpus) GPUS="$2"; shift 2 ;;
     --skip-limit-check) SKIP_LIMIT_CHECK="1"; shift ;;
     --dry-run) DRY_RUN="1"; shift ;;
@@ -90,9 +93,22 @@ if [[ -z "${TEST_CONFIG}" ]]; then
   TEST_CONFIG="./configs/problems/${PROBLEM}/config_test.yaml"
 fi
 
+if [[ -z "${NTASKS_PER_NODE}" ]]; then
+  if [[ "${COARACI_IS_GPU}" == "1" ]]; then
+    NTASKS_PER_NODE="1"
+  else
+    NTASKS_PER_NODE="${COARACI_NTASKS_PER_NODE}"
+  fi
+fi
+
 if [[ "${COARACI_IS_GPU}" == "1" ]]; then
   if (( GPUS < 1 || GPUS > COARACI_GPUS_PER_NODE_MAX )); then
     echo "For gpu-x queue, --gpus must be between 1 and ${COARACI_GPUS_PER_NODE_MAX}." >&2
+    exit 1
+  fi
+  if (( NTASKS_PER_NODE * CPUS_PER_TASK > GPUS * 16 )); then
+    echo "gpu-x allows at most 16 CPUs per requested GPU. Current request is $((NTASKS_PER_NODE * CPUS_PER_TASK)) CPUs for ${GPUS} GPU(s)." >&2
+    echo "Adjust --ntasks-per-node, --cpus-per-task, or --gpus." >&2
     exit 1
   fi
 else
@@ -125,7 +141,7 @@ SBATCH_ARGS=(
   --error "output/hpc_logs/%x_%j.err"
   --partition "${COARACI_PARTITION}"
   --nodes "${COARACI_NODES}"
-  --ntasks-per-node "${COARACI_NTASKS_PER_NODE}"
+  --ntasks-per-node "${NTASKS_PER_NODE}"
   --cpus-per-task "${CPUS_PER_TASK}"
   --time "${TIME}"
 )

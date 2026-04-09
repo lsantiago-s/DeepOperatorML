@@ -12,20 +12,22 @@ data_labels:
   targets: [g_u]
 
 input_function_keys:  
-  - c44
   - c11
-  - c33
   - c13
+  - c33
+  - c44
   - ρ
-  - ω
+  - η
+  - a0
 
 input_function_labels:
-  - "$c_{44}$"
   - "$c_{11}$"
-  - "$c_{33}$"
   - "$c_{13}$"
+  - "$c_{33}$"
+  - "$c_{44}$"
   - "$\\rho$"
-  - "$\\omega$"
+  - "$\\eta$"
+  - "$a_0$"
 
 coordinate_keys:
   - x

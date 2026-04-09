@@ -1,12 +1,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
+from src.problems.plotting_compat import configure_matplotlib_text
 
-plt.rc('font', family='serif', size=15)
-plt.rc('text', usetex=True)
-plt.rc('axes', labelsize=15)
-plt.rc('legend', fontsize=12)
-plt.rc('image', cmap='Spectral')
+configure_matplotlib_text(
+    font_size=15,
+    axes_labelsize=15,
+    legend_fontsize=12,
+    cmap_name='Spectral',
+)
 # matplotlib.rcParams['text.latex.preamble'] = r'\math'
 
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import errno
 import logging
+import platform
 import shutil
 import subprocess
 import tempfile
@@ -61,14 +63,37 @@ class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
         with open(self.config_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
 
+    @staticmethod
+    def _default_solver_candidates() -> tuple[Path, ...]:
+        libs_dir = Path(__file__).parent / "libs"
+        system = platform.system().lower()
+
+        if system == "linux":
+            names = ("multilayer_linux.exe", "multilayer.exe", "HORROCK_190615.exe")
+        elif system == "darwin":
+            names = ("multilayer.exe", "multilayer_linux.exe", "HORROCK_190615.exe")
+        elif system == "windows":
+            names = ("HORROCK_190615.exe", "multilayer.exe", "multilayer_linux.exe")
+        else:
+            names = ("multilayer_linux.exe", "multilayer.exe", "HORROCK_190615.exe")
+
+        return tuple(libs_dir / name for name in names)
+
     def _get_solver_path(self) -> Path:
         solver_path = self.config.get("executable_path")
-        if solver_path is None:
-            solver_path = Path(__file__).parent / "libs" / "multilayer.exe"
-        path = Path(solver_path).expanduser().resolve()
-        if not path.exists():
-            raise FileNotFoundError(f"Solver executable not found: {path}")
-        return path
+        if solver_path not in (None, "", "auto"):
+            path = Path(solver_path).expanduser().resolve()
+            if not path.exists():
+                raise FileNotFoundError(f"Solver executable not found: {path}")
+            return path
+
+        candidates = self._default_solver_candidates()
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate.resolve()
+
+        tried = ", ".join(str(path.resolve()) for path in candidates)
+        raise FileNotFoundError(f"Solver executable not found. Tried: {tried}")
 
     @staticmethod
     def _is_stable_transverse_isotropic(c11: float, c12: float, c13: float, c33: float, c44: float) -> bool:
@@ -303,13 +328,23 @@ class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
                 properties=properties,
             )
 
-            result = subprocess.run(
-                [f"./{local_solver.name}"],
-                cwd=workdir,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
+            try:
+                result = subprocess.run(
+                    [f"./{local_solver.name}"],
+                    cwd=workdir,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                )
+            except OSError as exc:
+                if exc.errno == errno.ENOEXEC:
+                    raise RuntimeError(
+                        "Solver executable format is incompatible with this platform. "
+                        f"Selected solver: {solver_path} | platform={platform.system()}. "
+                        "Use executable_path: auto with a native build in libs/, "
+                        "or point executable_path to a platform-compatible solver binary."
+                    ) from exc
+                raise
             if result.returncode != 0:
                 raise RuntimeError(
                     f"Solver failed with return code {result.returncode}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -429,15 +464,40 @@ class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
                 medium2 = props[1, :7]
                 a0_val = self._sample_a0(rng)
                 omega_val = self._compute_omega_from_a0(a0=a0_val, medium1=medium1)
+                attempt_idx = sample_retries + 1
+
+                logger.info(
+                    "Sample %d/%d: running solver (attempt %d, case=%s, a0=%.6g, omega=%.6g).",
+                    idx,
+                    num_samples,
+                    attempt_idx,
+                    case_label,
+                    a0_val,
+                    omega_val,
+                )
+                sample_start = time.perf_counter()
 
                 channels = self._run_solver(float(omega_val), props)
                 u_full, blocks = self._assemble_full_matrix(channels=channels)
+                sample_duration = time.perf_counter() - sample_start
 
                 if self._all_finite_complex(u_full):
+                    logger.info(
+                        "Sample %d/%d: solver finished in %.2f s.",
+                        idx,
+                        num_samples,
+                        sample_duration,
+                    )
                     break
 
                 sample_retries += 1
                 rejected_total += 1
+                logger.warning(
+                    "Sample %d/%d: solver returned non-finite output after %.2f s.",
+                    idx,
+                    num_samples,
+                    sample_duration,
+                )
                 if sample_retries >= max_attempts_per_sample:
                     raise RuntimeError(
                         f"Unable to generate finite output for sample {idx} after {max_attempts_per_sample} attempts."

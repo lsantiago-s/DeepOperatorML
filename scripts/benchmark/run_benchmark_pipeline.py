@@ -43,6 +43,46 @@ def _run_cmd(cmd: list[str], dry_run: bool) -> None:
     subprocess.run(cmd, check=True)
 
 
+def _resolve_config_path(path_value: str, *, config_path: Path, repo_root: Path) -> Path:
+    candidate = Path(str(path_value)).expanduser()
+    if candidate.is_absolute():
+        return candidate
+
+    config_relative = (config_path.parent / candidate).resolve()
+    repo_relative = (repo_root / candidate).resolve()
+
+    if config_relative.exists():
+        return config_relative
+    if repo_relative.exists():
+        return repo_relative
+    return repo_relative
+
+
+def _missing_datagen_inputs(datagen_cfg_path: Path, repo_root: Path) -> tuple[list[tuple[str, Path]], Path | None]:
+    datagen_cfg = _load_yaml(datagen_cfg_path)
+    missing: list[tuple[str, Path]] = []
+
+    for key, value in datagen_cfg.items():
+        if not key.endswith("_data_path"):
+            continue
+        resolved = _resolve_config_path(str(value), config_path=datagen_cfg_path, repo_root=repo_root)
+        if not resolved.exists():
+            missing.append((key, resolved))
+
+    data_filename = datagen_cfg.get("data_filename")
+    raw_output = None
+    if data_filename:
+        raw_output = _resolve_config_path(str(data_filename), config_path=datagen_cfg_path, repo_root=repo_root)
+
+    return missing, raw_output
+
+
+def _normalize_command(raw_cmd: Any) -> list[str]:
+    if not isinstance(raw_cmd, list) or not raw_cmd:
+        raise ValueError("external_datagen_command must be a non-empty list of strings.")
+    return [str(part) for part in raw_cmd]
+
+
 def _is_fno_stub(repo_root: Path) -> bool:
     marker = repo_root / "src" / "modules" / "pipe" / "fno_train.py"
     if not marker.exists():
@@ -124,14 +164,58 @@ def main() -> None:
             continue
 
         print(f"\n=== Problem: {problem} | Track: {args.model_track} ===")
-        datagen_cfg = str((repo_root / str(cfg["datagen_config"])).resolve())
+        datagen_cfg_path = (repo_root / str(cfg["datagen_config"])).resolve()
+        datagen_cfg = str(datagen_cfg_path)
         preprocessing_cfg = str((repo_root / str(cfg["preprocessing_config"])).resolve())
         exp_cfg_path = (repo_root / str(cfg["experiment_config"])).resolve()
         test_cfg_path = (repo_root / str(cfg["test_config"])).resolve()
         exp_cfg_path_str = str(exp_cfg_path)
         test_cfg_path_str = str(test_cfg_path)
+        run_gen_for_problem = do_gen
 
         if do_gen:
+            missing_inputs, raw_output = _missing_datagen_inputs(datagen_cfg_path, repo_root)
+            if missing_inputs:
+                external_cmd_cfg = cfg.get("external_datagen_command", None)
+                if external_cmd_cfg is not None:
+                    print(f"[prep] {problem}: generating external datagen inputs before gen_data.py")
+                    _run_cmd(_normalize_command(external_cmd_cfg), dry_run=args.dry_run)
+                    if args.dry_run:
+                        missing_inputs = []
+                    else:
+                        missing_inputs, raw_output = _missing_datagen_inputs(datagen_cfg_path, repo_root)
+
+                if missing_inputs:
+                    details = ", ".join(f"{key}={path}" for key, path in missing_inputs)
+                    if raw_output is not None and raw_output.exists():
+                        print(
+                            f"[SKIP gen] {problem}: missing external datagen inputs ({details}). "
+                            f"Reusing existing raw dataset at {raw_output}."
+                        )
+                        run_gen_for_problem = False
+                    elif bool(cfg.get("skip_if_missing_datagen_inputs", False)):
+                        if args.problem:
+                            raise FileNotFoundError(
+                                f"{problem} is missing external datagen inputs: {details}. "
+                                "Provide the configured source files or point the datagen config to their location."
+                            )
+                        print(
+                            f"[SKIP] {problem}: missing external datagen inputs ({details}). "
+                            "Skipping this problem for the current benchmark run."
+                        )
+                        continue
+                    elif args.problem:
+                        raise FileNotFoundError(
+                            f"{problem} is missing external datagen inputs: {details}. "
+                            "Provide the configured source files or point the datagen config to their location."
+                        )
+                    else:
+                        raise FileNotFoundError(
+                            f"{problem} is missing external datagen inputs: {details}. "
+                            "No external_datagen_command succeeded for this problem."
+                        )
+
+        if run_gen_for_problem:
             _run_cmd(
                 ["python3", "gen_data.py", "--problem", problem, "--config", datagen_cfg],
                 dry_run=args.dry_run,

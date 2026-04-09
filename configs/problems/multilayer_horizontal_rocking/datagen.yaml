@@ -1,5 +1,5 @@
 data_filename: ./data/raw/multilayer_horizontal_rocking/multilayer_horizontal_rocking_v2_bimaterial.npz
-executable_path: ./src/problems/multilayer_horizontal_rocking/libs/multilayer.exe
+executable_path: auto
 
 seed: 42
 num_samples: 120

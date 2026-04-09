@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import DataLoader 
 from src.modules.pipe.saving import Saver
 from src.modules.pipe.plot_training import plot_training
+from src.modules.pipe.wandb_logger import WandbLogger
 from src.modules.models.config.don_config import DeepONetConfig
 from src.modules.pipe.don_training_loop import DeepONetTrainingLoop
 from src.modules.models.deeponet.deeponet_factory import DeepONetFactory
@@ -134,6 +135,14 @@ def deeponet_train(
     PathConfig.create_directories(path_cfg)
 
     saver = Saver()
+    wandb_logger = WandbLogger(
+        cfg=train_cfg.wandb,
+        data_cfg=data_cfg,
+        train_cfg=train_cfg,
+        exp_cfg=exp_cfg,
+        path_cfg=path_cfg,
+    )
+    wandb_logger.start()
 
     saver.save_transform_pipeline(
         file_path=path_cfg.checkpoints_path,
@@ -148,50 +157,55 @@ def deeponet_train(
         device=train_cfg.device,
         checkpoint_dir=path_cfg.checkpoints_path,
         sampler=train_sampler,
-        label_map=data_cfg.targets_labels
+        label_map=data_cfg.targets_labels,
+        epoch_callback=wandb_logger.log_epoch,
     )
 
     # ----------------------------------------- Train loop ---------------------------------
     start_time = time.time()
+    training_history_path = path_cfg.plots_path / 'training_history.png'
 
-    loop.run()
+    try:
+        loop.run()
 
-    end_time = time.time()
+        end_time = time.time()
 
-    training_time = end_time - start_time
+        training_time = end_time - start_time
 
-    times = {'training_time': training_time}
+        times = {'training_time': training_time}
 
-    history = loop.history.get_history()
+        history = loop.history.get_history()
 
-    fig = plot_training(
-        history=history, plot_config=dataclasses.asdict(train_cfg))
+        fig = plot_training(
+            history=history, plot_config=dataclasses.asdict(train_cfg))
 
-    exp_cfg = exp_cfg.get_serializable_config(train_strategy)
+        exp_cfg = exp_cfg.get_serializable_config(train_strategy)
 
-    saver.save_model_info(
-        file_path=path_cfg.outputs_path / 'experiment_config.yaml',
-        model_info={
-            **dataclasses.asdict(exp_cfg),
-            "model": dataclasses.asdict(exp_cfg.model)
-        }
-    )
+        saver.save_model_info(
+            file_path=path_cfg.outputs_path / 'experiment_config.yaml',
+            model_info={
+                **dataclasses.asdict(exp_cfg),
+                "model": dataclasses.asdict(exp_cfg.model)
+            }
+        )
 
-    saver.save_plots(
-        file_path=path_cfg.plots_path / 'training_history.png',
-        figure=fig
-    )
+        saver.save_plots(
+            file_path=training_history_path,
+            figure=fig
+        )
 
-    saver.save_time(
-        file_path=path_cfg.metrics_path / 'training_time.yaml',
-        times=times
-    )
+        saver.save_time(
+            file_path=path_cfg.metrics_path / 'training_time.yaml',
+            times=times
+        )
 
-    saver.save_history(
-        file_path=path_cfg.metrics_path / 'train_metrics.yaml',
-        history=history
-    )
-    logger.info(msg=f"Experiment saved at {path_cfg.outputs_path}")
+        saver.save_history(
+            file_path=path_cfg.metrics_path / 'train_metrics.yaml',
+            history=history
+        )
+        logger.info(msg=f"Experiment saved at {path_cfg.outputs_path}")
 
-    logger.info(
-        msg=f"\n----------------------------------------Training concluded in: {training_time:.2f} seconds---------------------------\n")
+        logger.info(
+            msg=f"\n----------------------------------------Training concluded in: {training_time:.2f} seconds---------------------------\n")
+    finally:
+        wandb_logger.finish(training_history_path=training_history_path)

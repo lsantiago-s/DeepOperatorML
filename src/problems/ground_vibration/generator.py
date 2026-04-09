@@ -12,24 +12,153 @@ logger = logging.getLogger(__name__)
 class GroundVibrationProblemGenerator(BaseProblemGenerator):
     def __init__(self, config_path: str):
         super().__init__(config_path)
-        with open(config_path, 'r') as file:
+        self.config_path = Path(config_path).resolve()
+        with open(self.config_path, 'r', encoding='utf-8') as file:
             self.config = yaml.safe_load(file)
 
     def load_config(self) -> dict[str, Any]:
         return self.config
+
+    def _resolve_config_path(self, key: str) -> Path:
+        raw_path = self.config[key]
+        candidate = Path(raw_path).expanduser()
+        if candidate.is_absolute():
+            return candidate
+
+        repo_root = Path(__file__).resolve().parents[3]
+        config_relative = (self.config_path.parent / candidate).resolve()
+        repo_relative = (repo_root / candidate).resolve()
+
+        if config_relative.exists():
+            return config_relative
+        if repo_relative.exists():
+            return repo_relative
+        return repo_relative
+
+    def _require_existing_path(self, key: str) -> Path:
+        path = self._resolve_config_path(key)
+        if not path.exists():
+            raise FileNotFoundError(
+                f"Missing required ground_vibration input '{key}': {path}\n"
+                "This problem depends on externally provided CSV/JSON artifacts. "
+                "Place the dataset at the configured path or update the datagen YAML."
+            )
+        return path
+
+    @staticmethod
+    def _as_2d_rows(data: np.ndarray) -> np.ndarray:
+        arr = np.asarray(data, dtype=float)
+        if arr.ndim == 1:
+            return arr.reshape(1, -1)
+        if arr.ndim != 2:
+            raise ValueError(f"Expected params array to be 1D or 2D, got shape {arr.shape}.")
+        return arr
+
+    @staticmethod
+    def _load_json(path: Path) -> dict[str, Any]:
+        with open(path, 'r', encoding='utf-8') as f:
+            payload = json.load(f)
+        if not isinstance(payload, dict):
+            raise ValueError(f"Expected JSON object in {path}, got {type(payload).__name__}.")
+        return payload
+
+    def _normalize_raw_inputs(
+        self,
+        pde_params_data: np.ndarray,
+        mesh_metadata: dict[str, Any],
+    ) -> dict[str, np.ndarray]:
+        params = self._as_2d_rows(pde_params_data)
+        layout = [str(name).lower() for name in self.config.get(
+            "params_array_layout",
+            ["c11", "c13", "c33", "c44", "rho", "omega"],
+        )]
+        if params.shape[1] != len(layout):
+            raise ValueError(
+                "params_array column count does not match params_array_layout. "
+                f"Got shape {params.shape} and layout {layout}."
+            )
+
+        columns = {name: params[:, idx] for idx, name in enumerate(layout)}
+        required = ["c11", "c13", "c33", "c44", "rho"]
+        missing_required = [name for name in required if name not in columns]
+        if missing_required:
+            raise KeyError(f"params_array is missing required columns: {missing_required}")
+
+        c44 = np.asarray(columns["c44"], dtype=float)
+        rho = np.asarray(columns["rho"], dtype=float)
+        if np.any(c44 <= 0.0) or np.any(rho <= 0.0):
+            raise ValueError("c44 and rho must be positive to compute shear-wave speed and a0.")
+
+        eta = np.asarray(
+            columns.get(
+                "eta",
+                np.full(params.shape[0], float(self.config.get("default_eta", 0.0)), dtype=float),
+            ),
+            dtype=float,
+        )
+
+        if "a0" in columns:
+            a0 = np.asarray(columns["a0"], dtype=float)
+            omega = np.asarray(columns.get("omega", np.full_like(a0, np.nan)), dtype=float)
+        elif "omega" in columns:
+            omega = np.asarray(columns["omega"], dtype=float)
+            strip_half_width = self.config.get("strip_half_width", mesh_metadata.get("strip_half_width", None))
+            if strip_half_width is None:
+                raise KeyError(
+                    "ground_vibration datagen requires 'strip_half_width' in config or metadata "
+                    "to convert omega to normalized frequency a0."
+                )
+            b_value = float(strip_half_width)
+            c_s = np.sqrt(c44 / rho)
+            a0 = omega * b_value / np.maximum(c_s, 1e-14)
+        else:
+            raise KeyError("params_array must include either 'a0' or 'omega'.")
+
+        if "omega" not in columns:
+            strip_half_width = self.config.get("strip_half_width", mesh_metadata.get("strip_half_width", None))
+            if strip_half_width is None:
+                raise KeyError(
+                    "ground_vibration datagen requires 'strip_half_width' in config or metadata "
+                    "to convert a0 back to omega for bookkeeping."
+                )
+            b_value = float(strip_half_width)
+            c_s = np.sqrt(c44 / rho)
+            omega = a0 * c_s / max(b_value, 1e-14)
+
+        xb = np.column_stack([
+            np.asarray(columns["c11"], dtype=float),
+            np.asarray(columns["c13"], dtype=float),
+            np.asarray(columns["c33"], dtype=float),
+            c44,
+            rho,
+            eta,
+            a0,
+        ])
+
+        return {
+            "xb": xb,
+            "c11": np.asarray(columns["c11"], dtype=float),
+            "c13": np.asarray(columns["c13"], dtype=float),
+            "c33": np.asarray(columns["c33"], dtype=float),
+            "c44": c44,
+            "rho": rho,
+            "eta": eta,
+            "a0": a0,
+            "omega": omega,
+        }
     
     def _get_input_functions(self, data: np.ndarray) -> np.ndarray[Any, Any]:
-        """Generate input functions to the operator (input to the branch).
+        """Generate branch inputs for the full influence matrix operator.
 
         Args:
-            data (np.ndarray): PDE params is (N_samples, 6) array, where each row is
-                (c11, c13, c33, c44, ρ, ω).
+            data (np.ndarray): Branch input array of shape (N_samples, 7) with
+                rows (c11, c13, c33, c44, rho, eta, a0).
 
         Returns:
-            pde_sample: Initial condition vector. Vector in space (x0, y0, z0) corresponding to the trajectorie's initial condition. 
+            np.ndarray: Branch input vectors for the operator surrogate.
         """
-        pde_sample = data
-        return pde_sample # (N, 6)
+        pde_sample = np.asarray(data, dtype=float)
+        return pde_sample
     
     def _get_coordinates(self, data: np.ndarray) -> np.ndarray[Any, Any]:
         """Return 1D surface-node coordinates."""
@@ -90,31 +219,42 @@ class GroundVibrationProblemGenerator(BaseProblemGenerator):
     
     def generate(self):
         start = time.perf_counter()
-        pde_params_data = np.loadtxt(self.config['pde_params_data_path'], delimiter=',')
-        mesh_params_data = json.load(open(self.config['mesh_params_data_path'], 'r'))['x_positions']
-        real_matrix_data = np.loadtxt(self.config['real_influence_matrix_data_path'], delimiter=',')
-        imag_matrix_data = np.loadtxt(self.config['imag_influence_matrix_data_path'],delimiter=',')
+        pde_params_path = self._require_existing_path('pde_params_data_path')
+        mesh_params_path = self._require_existing_path('mesh_params_data_path')
+        real_matrix_path = self._require_existing_path('real_influence_matrix_data_path')
+        imag_matrix_path = self._require_existing_path('imag_influence_matrix_data_path')
+
+        pde_params_data = np.loadtxt(pde_params_path, delimiter=',')
+        mesh_metadata = self._load_json(mesh_params_path)
+        mesh_params_data = mesh_metadata['x_positions']
+        real_matrix_data = np.loadtxt(real_matrix_path, delimiter=',')
+        imag_matrix_data = np.loadtxt(imag_matrix_path, delimiter=',')
+
+        normalized = self._normalize_raw_inputs(
+            pde_params_data=pde_params_data,
+            mesh_metadata=mesh_metadata,
+        )
 
         logger.info(f"Formatting...")
-        pde_samples = self._get_input_functions(pde_params_data)
-        # params_array columns from MATLAB generator:
-        # [c11, c13, c33, c44, rho, omega]
-        c11 = pde_samples[:, 0]
-        c13 = pde_samples[:, 1]
-        c33 = pde_samples[:, 2]
-        c44 = pde_samples[:, 3]
-        rho = pde_samples[:, 4]
-        omega = pde_samples[:, 5]
+        pde_samples = self._get_input_functions(normalized["xb"])
+        c11 = normalized["c11"]
+        c13 = normalized["c13"]
+        c33 = normalized["c33"]
+        c44 = normalized["c44"]
+        rho = normalized["rho"]
+        eta = normalized["eta"]
+        a0 = normalized["a0"]
+        omega = normalized["omega"]
 
         mesh_points = self._get_coordinates(mesh_params_data)
         influence_matrix = self._influence_matrix(real_matrix_data=real_matrix_data, imag_matrix_data=imag_matrix_data, pde_samples=pde_samples, mesh_points=mesh_points)
 
         logger.info(
-            f"\nData shapes:\nSample (c11, c13, c33, c44, ρ, ω): {pde_samples.shape},\n"
-            f"min: ({c11.min(axis=0):.2f}, {c13.min(axis=0):.2f}, {c33.min(axis=0):.2f}, {c44.min(axis=0):.2f})\n"
-            f"max: ({c11.max(axis=0):.2f}, {c13.max(axis=0):.2f}, {c33.max(axis=0):.2f}, {c44.max(axis=0):.2f})\n"
-            f"mean:({c11.mean(axis=0):.2f}, {c13.mean(axis=0):.2f}, {c33.mean(axis=0):.2f}, {c44.mean(axis=0):.2f})\n"
-            f"std: ({c11.std(axis=0):.2f}, {c13.std(axis=0):.2f}, {c33.std(axis=0):.2f}, {c44.std(axis=0):.2f})\n"
+            f"\nData shapes:\nSample (c11, c13, c33, c44, rho, eta, a0): {pde_samples.shape},\n"
+            f"min: ({c11.min(axis=0):.2f}, {c13.min(axis=0):.2f}, {c33.min(axis=0):.2f}, {c44.min(axis=0):.2f}, {rho.min(axis=0):.2f}, {eta.min(axis=0):.4f}, {a0.min(axis=0):.2f})\n"
+            f"max: ({c11.max(axis=0):.2f}, {c13.max(axis=0):.2f}, {c33.max(axis=0):.2f}, {c44.max(axis=0):.2f}, {rho.max(axis=0):.2f}, {eta.max(axis=0):.4f}, {a0.max(axis=0):.2f})\n"
+            f"mean:({c11.mean(axis=0):.2f}, {c13.mean(axis=0):.2f}, {c33.mean(axis=0):.2f}, {c44.mean(axis=0):.2f}, {rho.mean(axis=0):.2f}, {eta.mean(axis=0):.4f}, {a0.mean(axis=0):.2f})\n"
+            f"std: ({c11.std(axis=0):.2f}, {c13.std(axis=0):.2f}, {c33.std(axis=0):.2f}, {c44.std(axis=0):.2f}, {rho.std(axis=0):.2f}, {eta.std(axis=0):.4f}, {a0.std(axis=0):.2f})\n"
             f"x=[{mesh_points.min()}, {mesh_points.max()}], {mesh_points.shape}, \n"
             f"Influence matrix: {influence_matrix.shape}.")
 
@@ -166,6 +306,20 @@ class GroundVibrationProblemGenerator(BaseProblemGenerator):
                     "mean": f"{rho.mean(axis=0):.2f}",
                     "std":  f"{rho.std(axis=0):.2f},"
                 },
+                "η": {
+                    "shape": len(pde_samples),
+                    "min":  f"{eta.min(axis=0):.4f}",
+                    "max":  f"{eta.max(axis=0):.4f}",
+                    "mean": f"{eta.mean(axis=0):.4f}",
+                    "std":  f"{eta.std(axis=0):.4f},"
+                },
+                "a0": {
+                    "shape": len(pde_samples),
+                    "min":  f"{a0.min(axis=0):.2f}",
+                    "max":  f"{a0.max(axis=0):.2f}",
+                    "mean": f"{a0.mean(axis=0):.2f}",
+                    "std":  f"{a0.std(axis=0):.2f},"
+                },
 
                 "ω": {
                     "shape": len(pde_samples),
@@ -195,19 +349,32 @@ class GroundVibrationProblemGenerator(BaseProblemGenerator):
                 },
                 "layout": "flattened (field_i, source_j) x [u_xx, u_xz, u_zx, u_zz]",
                 "reciprocity_relative_error": float(reciprocity_error),
-            }
+            },
+            "formulation": {
+                "operator_input": ["c11", "c13", "c33", "c44", "rho", "eta", "a0"],
+                "source_params_layout": self.config.get("params_array_layout", ["c11", "c13", "c33", "c44", "rho", "omega"]),
+                "a0_definition": "a0 = omega * b / cS, cS = sqrt(c44 / rho)",
+                "strip_half_width": float(self.config.get("strip_half_width", mesh_metadata.get("strip_half_width", 1.0))),
+                "notes": [
+                    "eta enters the viscoelastic constitutive law through c_ij* = c_ij (1 + i eta).",
+                    "If source params provide omega instead of a0, the generator derives a0 from strip_half_width.",
+                ],
+            },
         }
-        path = Path(self.config["data_filename"])
+        path = self._resolve_config_path("data_filename")
         if path.parent:
             path.parent.mkdir(parents=True, exist_ok=True)
 
         np.savez(
             path, 
+            xb=pde_samples,
             c11=c11,
             c13=c13,
             c33=c33,
             c44=c44,
             ρ=rho,
+            η=eta,
+            a0=a0,
             ω=omega,
             x=mesh_points,
             g_u=influence_matrix

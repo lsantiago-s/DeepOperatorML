@@ -42,6 +42,19 @@ U = [[Uxx, Uxz],
 
 ## Geração de dataset
 
+Seleção do solver:
+
+- `executable_path: auto` escolhe o binário nativo da plataforma em `libs/`
+- Linux: `multilayer_linux.exe`
+- macOS: `multilayer.exe`
+- Windows: `HORROCK_190615.exe`
+
+Para recompilar o solver no Linux:
+
+```bash
+./src/problems/multilayer_horizontal_rocking/libs/build_linux_solver.sh
+```
+
 Baseline principal:
 
 ```bash

@@ -6,13 +6,39 @@ import numpy as np
 from typing import Any
 from pathlib import Path
 from tqdm.auto import tqdm
-from src.problems.rajapakse_fixed_material.influence import influence
+from src.problems.rajapakse_fixed_material.influence import influence, load_native_library
 from src.problems.base_generator import BaseProblemGenerator
 
 logger = logging.getLogger(__name__)
 
 
 class RajapakseFixedMaterialGenerator(BaseProblemGenerator):
+    INT_CONFIG_KEYS = {
+        "N_r",
+        "N_z",
+        "N",
+        "component",
+        "loadtype",
+        "bvptype",
+    }
+
+    FLOAT_CONFIG_KEYS = {
+        "r_min",
+        "z_min",
+        "r_max",
+        "z_max",
+        "omega_min",
+        "omega_max",
+        "load",
+        "z_source",
+        "l_source",
+        "r_source",
+        "E",
+        "nu",
+        "damp",
+        "dens",
+    }
+
     def __init__(self, config: str | dict[str, Any]):
         super().__init__(config)
         self.libs_path = Path(__file__).parent / 'libs'
@@ -21,13 +47,28 @@ class RajapakseFixedMaterialGenerator(BaseProblemGenerator):
             self.config = self.load_config()
         else:
             self.config_path = None
-            self.config = config
+            self.config = self._normalize_config(config)
 
     def load_config(self):
         if self.config_path:
             with open(self.config_path) as f:
-                return yaml.safe_load(f)
-        return self.config
+                config = yaml.safe_load(f)
+                return self._normalize_config(config)
+        return self._normalize_config(self.config)
+
+    @classmethod
+    def _normalize_config(cls, config: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(config)
+
+        for key in cls.INT_CONFIG_KEYS:
+            if key in normalized:
+                normalized[key] = int(normalized[key])
+
+        for key in cls.FLOAT_CONFIG_KEYS:
+            if key in normalized:
+                normalized[key] = float(normalized[key])
+
+        return normalized
 
     def _get_input_functions(self):
         """Generate branch input functions by sampling normalized frequencies for a fixed material.
@@ -120,6 +161,9 @@ class RajapakseFixedMaterialGenerator(BaseProblemGenerator):
         return wd, duration
 
     def generate(self):
+        # Fail fast before starting the expensive integration loop if the native
+        # Rajapakse solver cannot be loaded on this machine.
+        load_native_library()
         delta = self._get_input_functions()
         coordinates = self._get_coordinates()
         r_field, z_field = coordinates

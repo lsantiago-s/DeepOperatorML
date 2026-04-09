@@ -310,6 +310,9 @@ def _resolve_reference_parameter(data_cfg: DataConfig, test_cfg: TestConfig) -> 
                 return str(param)
 
     for param in data_cfg.input_functions:
+        norm = _normalize_label(param)
+        if norm == "a0" or "a0" in norm:
+            return str(param)
         if "omega" in _normalize_label(param):
             return str(param)
     return str(data_cfg.input_functions[0])

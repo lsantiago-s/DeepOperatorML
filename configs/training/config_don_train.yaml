@@ -1,5 +1,15 @@
 # ------------------- Model architecture ------------------
 seed: 42
+wandb:
+  enabled: true
+  project: DeepOperatorML
+  entity: null
+  group: null
+  job_type: train
+  mode: online
+  name: null
+  tags: []
+  notes: null
 training_strategy: vanilla
 output_handling: shared_branch
 embedding_dimension: 60
@@ -7,20 +17,20 @@ branch:
   architecture: resnet
   # ---- for MLP ---------
   activation: gelu
-  hidden_layers: [256, 256, 256, 128, 128, 128, 128, 128]
-  dropout_rates: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-  batch_normalization: [False, False, False, False, False, False, False, False, False]
-  layer_normalization: [False, False, False, False, False, False, False, False, False]
+  hidden_layers: [256, 256, 256, 128, 128, 128]
+  dropout_rates: [0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.0] # one more element than hidden layers to allow for input dropout
+  batch_normalization: [False, False, False, False, False, False, False] # one more element than hidden layers to allow for input batch norm
+  layer_normalization: [False, False, False, False, False, False, False] # one more element than hidden layers to allow for input layer norm
   # ---- for KAN ---------
   degree: 8
 trunk:
   architecture: resnet
   # ---- for MLP ---------
   activation: gelu
-  hidden_layers: [256, 256, 256, 128, 128, 128, 128, 128]
-  dropout_rates: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-  batch_normalization: [False, False, False, False, False, False, False, False, False]
-  layer_normalization: [False, False, False, False, False, False, False, False, False]
+  hidden_layers: [256, 256, 256, 128, 128, 128]
+  dropout_rates: [0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.0] # one more element than hidden layers to allow for input dropout
+  batch_normalization: [False, False, False, False, False, False, False] # one more element than hidden layers to allow for input batch norm
+  layer_normalization: [False, False, False, False, False, False, False] # one more element than hidden layers to allow for input layer norm
   # ---- for KAN ---------
   degree: 8
   # ---- for Transformer ---------
@@ -53,14 +63,14 @@ rescaling:
 pod_type: by_channel # stacked or by_channel
 
 # ------------------- Parameters for vanilla / pod training ------------------
-branch_batch_size: 10 # Can't be null
+branch_batch_size: 100 # Can't be null
 trunk_batch_size: null
 error: matrix_fro
 optimizer_schedule:
-  - epochs: 3000
+  - epochs: 5000
     optimizer_type: adam
-    learning_rate: 0.0004
-    l2_regularization: 0.00000
+    learning_rate: 0.0001
+    l2_regularization: 0.000005
     # lr_scheduler:
     #   type: step
     #   step_size: 500
@@ -71,21 +81,21 @@ decomposition_type: svd
 
 two_step_optimizer_schedule:
   trunk_phase:
-    - epochs: 3000
+    - epochs: 5000
       optimizer_type: adam
       learning_rate: 0.0005
-      l2_regularization: 1.0e-5 
+      l2_regularization: 0.000005
     # - epochs: 1000
     #   optimizer_type: adam
     #   learning_rate: 0.0001
-    #   l2_regularization: 1.0e-5
+    #   l2_regularization: 0.000001
     #   lr_scheduler:
     #     type: step
     #     step_size: 100
     #     gamma: 0.7
 
   branch_phase:
-    - epochs: 1000
+    - epochs: 5000
       optimizer_type: adam
       learning_rate: 0.001
       l2_regularization: 0.000001

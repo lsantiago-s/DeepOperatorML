@@ -4,7 +4,7 @@ import logging
 from collections import defaultdict
 from pathlib import Path
 from dataclasses import asdict
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 from torch.utils.data import DataLoader
 from src.modules.models.deeponet.dataset.deeponet_sampler import DeepONetSampler
 from src.modules.pipe.history import HistoryStorer
@@ -34,7 +34,8 @@ class DeepONetTrainingLoop:
         checkpoint_dir: str | Path,
         val_loader: Optional[DataLoader] = None,
         device: str | torch.device = "cpu",
-        label_map: list[str] | None = None
+        label_map: list[str] | None = None,
+        epoch_callback: Callable[..., None] | None = None,
     ) -> None:
         # Core references --------------------------------------------------
         self.device: torch.device = torch.device(device)
@@ -73,6 +74,7 @@ class DeepONetTrainingLoop:
 
         # Label map -------------------------------------------------------
         self.label_map = label_map
+        self.epoch_callback = epoch_callback
 
     # ------------------------------------------------------------------ private
 
@@ -99,8 +101,10 @@ class DeepONetTrainingLoop:
     # ----------------------------------------------------------------- training
     def run(self) -> None:
         epoch = 0
+        global_epoch = 0
         while True:
             epoch += 1
+            global_epoch += 1
             if self.epochs_in_current_spec >= self.epochs_per_spec:
                 if self.current_spec_idx < len(self.optimizer_specs) - 1:
                     self.current_spec_idx += 1
@@ -166,6 +170,17 @@ class DeepONetTrainingLoop:
 
             if self.scheduler is not None:
                 self.scheduler.step()
+
+            if self.epoch_callback is not None:
+                self.epoch_callback(
+                    phase=self.phases[self.current_phase - 1],
+                    phase_index=self.current_phase,
+                    phase_epoch=epoch,
+                    global_epoch=global_epoch,
+                    learning_rate=self.optimizer.param_groups[0]["lr"],
+                    train_metrics=train_metrics,
+                    val_metrics=val_metrics,
+                )
 
             # Logging ------------------------------------------------------
             self._log_progress(epoch, train_metrics, val_metrics)

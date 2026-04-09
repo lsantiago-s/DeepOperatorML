@@ -17,6 +17,8 @@ PROBLEM=""
 MODEL_TRACK="don"
 STAGE="all"
 CPUS_PER_TASK="1"
+CPUS_PER_TASK_EXPLICIT="0"
+NTASKS_PER_NODE=""
 GPUS="3"
 FREEZE_DATASET="1"
 FREEZE_EXPERIMENT="1"
@@ -39,6 +41,7 @@ Options:
   --model-track <don|fno>            Model track (default: don)
   --stage <gen|preprocess|train|test|all>  Stage (default: all)
   --cpus-per-task <int>              CPUs per task (default: 1)
+  --ntasks-per-node <int>            Tasks per node (default: 1 on gpu-x, queue profile otherwise)
   --gpus <int>                       GPUs for gpu-x queue (default: 3)
   --no-freeze-dataset                Disable --freeze-dataset-version
   --no-freeze-experiment             Disable --freeze-experiment-version
@@ -59,7 +62,8 @@ while [[ $# -gt 0 ]]; do
     --problem) PROBLEM="$2"; shift 2 ;;
     --model-track) MODEL_TRACK="$2"; shift 2 ;;
     --stage) STAGE="$2"; shift 2 ;;
-    --cpus-per-task) CPUS_PER_TASK="$2"; shift 2 ;;
+    --cpus-per-task) CPUS_PER_TASK="$2"; CPUS_PER_TASK_EXPLICIT="1"; shift 2 ;;
+    --ntasks-per-node) NTASKS_PER_NODE="$2"; shift 2 ;;
     --gpus) GPUS="$2"; shift 2 ;;
     --no-freeze-dataset) FREEZE_DATASET="0"; shift ;;
     --no-freeze-experiment) FREEZE_EXPERIMENT="0"; shift ;;
@@ -81,7 +85,7 @@ if [[ -z "${TIME}" ]]; then
 fi
 coaraci_validate_walltime "${TIME}" "${COARACI_WALLTIME_MAX}"
 
-if [[ "${SKIP_LIMIT_CHECK}" != "1" ]]; then
+if [[ "${SKIP_LIMIT_CHECK}" != "1" && "${DRY_RUN}" != "1" ]]; then
   coaraci_check_job_limit "${COARACI_PARTITION}" "${COARACI_MAX_JOBS}"
 fi
 
@@ -89,9 +93,28 @@ if [[ -z "${JOB_NAME}" ]]; then
   JOB_NAME="deepop-pipeline-${QUEUE}"
 fi
 
+if [[ -z "${NTASKS_PER_NODE}" ]]; then
+  if [[ "${COARACI_IS_GPU}" == "1" ]]; then
+    NTASKS_PER_NODE="1"
+  else
+    NTASKS_PER_NODE="${COARACI_NTASKS_PER_NODE}"
+  fi
+fi
+
+if [[ "${CPUS_PER_TASK_EXPLICIT}" != "1" && "${PROBLEM}" == "ground_vibration" ]]; then
+  if [[ "${STAGE}" == "gen" || "${STAGE}" == "all" ]]; then
+    CPUS_PER_TASK="16"
+  fi
+fi
+
 if [[ "${COARACI_IS_GPU}" == "1" ]]; then
   if (( GPUS < 1 || GPUS > COARACI_GPUS_PER_NODE_MAX )); then
     echo "For gpu-x queue, --gpus must be between 1 and ${COARACI_GPUS_PER_NODE_MAX}." >&2
+    exit 1
+  fi
+  if (( NTASKS_PER_NODE * CPUS_PER_TASK > GPUS * 16 )); then
+    echo "gpu-x allows at most 16 CPUs per requested GPU. Current request is $((NTASKS_PER_NODE * CPUS_PER_TASK)) CPUs for ${GPUS} GPU(s)." >&2
+    echo "Adjust --ntasks-per-node, --cpus-per-task, or --gpus." >&2
     exit 1
   fi
 else
@@ -138,7 +161,7 @@ SBATCH_ARGS=(
   --error "output/hpc_logs/%x_%j.err"
   --partition "${COARACI_PARTITION}"
   --nodes "${COARACI_NODES}"
-  --ntasks-per-node "${COARACI_NTASKS_PER_NODE}"
+  --ntasks-per-node "${NTASKS_PER_NODE}"
   --cpus-per-task "${CPUS_PER_TASK}"
   --time "${TIME}"
 )

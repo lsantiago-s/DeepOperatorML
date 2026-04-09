@@ -3,11 +3,13 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import ConnectionPatch
 import matplotlib.ticker as ticker
 from matplotlib.figure import Figure
+from src.problems.plotting_compat import configure_matplotlib_text
 
-plt.rc('font', family='serif', size=14)
-plt.rc('text', usetex=True)
-plt.rc('axes', labelsize=14)
-plt.rc('legend', fontsize=12)
+configure_matplotlib_text(
+    font_size=14,
+    axes_labelsize=14,
+    legend_fontsize=12,
+)
 # matplotlib.rcParams['text.latex.preamble'] = r'\math'
 
 
