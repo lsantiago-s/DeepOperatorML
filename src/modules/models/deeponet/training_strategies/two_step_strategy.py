@@ -592,7 +592,7 @@ class TwoStepStrategy(DONTrainingStrategy): # TODO: implement share branch decom
 
     def apply_gradient_constraints(self, model: DeepONet):
         """Optional gradient clipping/normalization"""
-        pass
+        self._clip_gradients(model)
 
     def _decompose_trunk(self, model: 'DeepONet', trunk: torch.nn.Module, full_trunk_batch: torch.Tensor) -> tuple[torch.Tensor, ...]:
         """SVD decomposition of final trunk layer.

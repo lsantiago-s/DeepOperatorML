@@ -162,3 +162,14 @@ cython_debug/
 
 #temp .yaml file
 temp_config_*.yaml
+
+# Local agent and scratch artifacts
+.codex
+.codex/
+tmp/
+slurm-*.out
+nucleos.mod
+
+# Local solver/build outputs
+src/problems/multilayer_horizontal_rocking/libs/SAIDA_*.out
+src/problems/rajapakse_fixed_material/libs/build-fpc/

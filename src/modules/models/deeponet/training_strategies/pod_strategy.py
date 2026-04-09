@@ -131,7 +131,7 @@ class PODStrategy(DONTrainingStrategy):
 
     def apply_gradient_constraints(self, model: 'DeepONet'):
         """Optional gradient clipping/normalization"""
-        pass
+        self._clip_gradients(model)
 
     def execute_phase_transition(self, model: 'DeepONet'):
         """

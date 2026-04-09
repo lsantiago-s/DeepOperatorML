@@ -18,5 +18,5 @@ OPTIMIZER_MAP = {
 SCHEDULER_MAP = {
     "step": optim.lr_scheduler.StepLR,
     "exponential": optim.lr_scheduler.ExponentialLR,
-    # "cosine": optim.lr_scheduler.CosineAnnealingLR,
+    "cosine": optim.lr_scheduler.CosineAnnealingLR,
 }

@@ -91,14 +91,15 @@ def deeponet_train(
         branch_batch_size=train_cfg.branch_batch_size,
         num_trunk_samples=train_trunk_samples,
         trunk_batch_size=train_cfg.trunk_batch_size,
-        shuffle=False
+        shuffle=True
     )
 
     val_sampler = DeepONetSampler(
         num_branch_samples=val_branch_samples,
-        branch_batch_size=train_cfg.branch_batch_size,
+        branch_batch_size=train_cfg.val_branch_batch_size,
         num_trunk_samples=val_trunk_samples,
         trunk_batch_size=train_cfg.trunk_batch_size,
+        shuffle=False,
     )
 
     train_dataloader = DataLoader(
@@ -115,7 +116,17 @@ def deeponet_train(
     logger.info(
         msg=f"\nxb: {train_dataset[:]['xb'].shape},\nxt: {train_dataset[:]['xt'].shape},\ng_u: {train_dataset[:]['g_u'].shape}")
     logger.info(
-        msg=f"Training branch samples: {train_branch_samples} samples, train branch batch size: {train_cfg.branch_batch_size}\nTraining trunk samples: {train_trunk_samples} samples, train trunk batch size: {train_cfg.trunk_batch_size}")
+        msg=(
+            f"Training branch samples: {train_branch_samples} samples, "
+            f"train branch batch size: {train_cfg.branch_batch_size}, "
+            f"effective train batch size: {min(train_cfg.branch_batch_size, train_branch_samples)}\n"
+            f"Validation branch samples: {val_branch_samples} samples, "
+            f"validation branch batch size: {train_cfg.val_branch_batch_size}, "
+            f"effective val batch size: {min(train_cfg.val_branch_batch_size, val_branch_samples)}\n"
+            f"Training trunk samples: {train_trunk_samples} samples, train trunk batch size: {train_cfg.trunk_batch_size}\n"
+            f"Validation trunk samples: {val_trunk_samples} samples, val trunk batch size: {train_cfg.trunk_batch_size}"
+        )
+    )
 
     # ------------------------------------ Initialize model & train loop -----------------------------
 

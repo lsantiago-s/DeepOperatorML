@@ -10,11 +10,22 @@ logger = logging.getLogger(__name__)
 
 
 def test_model(test_cfg_base: TestConfig, exp_cfg_dict: dict[str, Any], data_cfg: DataConfig) -> None:
+    checkpoint_dir = (
+        test_cfg_base.output_path
+        / exp_cfg_dict['problem']
+        / test_cfg_base.experiment_version
+        / 'checkpoints'
+    )
+    checkpoint_path = checkpoint_dir / 'experiment_best.pt'
+    if not checkpoint_path.exists():
+        checkpoint_path = checkpoint_dir / 'experiment.pt'
+
     checkpoint = torch.load(
-        f=test_cfg_base.output_path / exp_cfg_dict['problem'] / test_cfg_base.experiment_version / 'checkpoints' / 'experiment.pt',
+        f=checkpoint_path,
         weights_only=False,
         map_location=test_cfg_base.device
     )
+    logger.info("Loaded checkpoint: %s", checkpoint_path)
     if exp_cfg_dict['model']['strategy']['name'] == 'two_step':
         exp_cfg_dict['model']['trunk'].update({'T_matrix': checkpoint['model']['trunk.T']})
         exp_cfg_dict['model']['branch'].update({'R_matrix': checkpoint['model']['branch.R']})

@@ -91,7 +91,7 @@ class VanillaStrategy(DONTrainingStrategy):
 
     def apply_gradient_constraints(self, model: DeepONet):
         """Optional gradient clipping/normalization"""
-        pass
+        self._clip_gradients(model)
 
     def state_dict(self) -> dict:
         """Strategy-specific state for checkpoints"""

@@ -1,0 +1,92 @@
+# ------------------- Model architecture ------------------
+seed: 42
+wandb:
+  enabled: true
+  project: DeepOperatorML
+  entity: null
+  group: null
+  job_type: train
+  mode: online
+  name: null
+  tags: [stable-train]
+  notes: "Stabilized DeepONet training with deterministic validation, cosine LR decay, and gradient clipping."
+training_strategy: vanilla
+output_handling: shared_branch
+embedding_dimension: 60
+branch:
+  architecture: resnet
+  activation: gelu
+  hidden_layers: [256, 256, 256, 128, 128, 128]
+  dropout_rates: [0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.0]
+  batch_normalization: [False, False, False, False, False, False, False]
+  layer_normalization: [False, False, False, False, False, False, False]
+  degree: 8
+trunk:
+  architecture: resnet
+  activation: gelu
+  hidden_layers: [256, 256, 256, 128, 128, 128]
+  dropout_rates: [0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.0]
+  batch_normalization: [False, False, False, False, False, False, False]
+  layer_normalization: [False, False, False, False, False, False, False]
+  degree: 8
+  num_heads: 8
+  num_layers: 4
+  d_model: 128
+  max_length: 256
+  dropout: 0.1
+  ff_mult: 4
+bias:
+  use_zero_bias: true
+loss_function: mse
+transforms:
+  branch:
+    normalization: standardize
+    feature_expansion: null
+  trunk:
+    normalization: standardize
+    feature_expansion: null
+  target:
+    normalization: standardize
+    feature_expansion: null
+rescaling:
+  exponent: 0
+
+# --------------------- POD Config ----------------------
+pod_type: by_channel
+
+# ------------------- Parameters for vanilla / pod training ------------------
+branch_batch_size: 100
+val_branch_batch_size: 256
+trunk_batch_size: null
+error: matrix_fro
+gradient_clip_norm: 1.0
+gradient_clip_value: null
+optimizer_schedule:
+  - epochs: 5000
+    optimizer_type: adam
+    learning_rate: 0.0001
+    l2_regularization: 0.000005
+    lr_scheduler:
+      type: cosine
+      T_max: 5000
+      eta_min: 0.000001
+
+# ------------------- Parameters for two step training ------------------
+decomposition_type: svd
+
+two_step_optimizer_schedule:
+  trunk_phase:
+    - epochs: 5000
+      optimizer_type: adam
+      learning_rate: 0.0005
+      l2_regularization: 0.000005
+
+  branch_phase:
+    - epochs: 5000
+      optimizer_type: adam
+      learning_rate: 0.001
+      l2_regularization: 0.000001
+      lr_scheduler:
+        type: step
+        step_size: 1000
+        gamma: 0.7

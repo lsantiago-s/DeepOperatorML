@@ -33,6 +33,22 @@ class DONTrainingStrategy(ABC):
         self.error_metric = ERROR_METRICS[config.error.lower()]
         self.loss = self.get_criterion()
 
+    def _clip_gradients(self, model: DeepONet) -> None:
+        params = [p for p in model.parameters() if p.grad is not None]
+        if not params:
+            return
+
+        if self.config.gradient_clip_value is not None:
+            torch.nn.utils.clip_grad_value_(
+                params,
+                clip_value=self.config.gradient_clip_value,
+            )
+        if self.config.gradient_clip_norm is not None:
+            torch.nn.utils.clip_grad_norm_(
+                params,
+                max_norm=self.config.gradient_clip_norm,
+            )
+
     @abstractmethod
     def prepare_components(self, model_config: DeepONetConfig):
         """

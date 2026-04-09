@@ -62,35 +62,70 @@ def inference(test_cfg: TestConfig, data_cfg: DataConfig):
     errors = {}
     times = {}
 
-    abs_error = metric(y_truth - y_pred).detach().numpy()
-    norm_truth = metric(y_truth).detach().numpy()
+    y_truth_normalized = y_truth
+    y_pred_normalized = y_pred
 
+    abs_error_normalized = metric(
+        y_truth_normalized - y_pred_normalized
+    ).detach().cpu().numpy()
+    norm_truth_normalized = metric(y_truth_normalized).detach().cpu().numpy()
 
-    errors['Physical Error'] = {}
     errors['Normalized Error'] = {}
+    errors['Physical Error'] = {}
     times['inference_time'] = duration
 
-    if test_cfg.transforms is not None:
-        if test_cfg.transforms.target.normalization is not None:
-            y_pred = transform_pipeline.inverse_transform(tensor=y_pred, component='target')
-    
-    for i, _ in enumerate(abs_error):
-        if test_cfg.transforms is not None:
-            errors['Physical Error'][data_cfg.targets_labels[i]] = (abs_error / norm_truth)[i]
-        else:
-            errors['Normalized Error'][data_cfg.targets_labels[i]] = (abs_error / norm_truth)[i]
-            errors['Physical Error'][data_cfg.targets_labels[i]] = (stats['g_u']['std'] * abs_error \
-                / (stats['g_u']['std'] * norm_truth + stats['g_u']['mean']))[i]
-            
-    msg = '\n'.join(list(map(lambda x, y: f"{x}: {y:.3%}",
-                             data_cfg.targets_labels, errors['Physical Error'].values())))
+    normalized_relative_error = abs_error_normalized / numpy.maximum(
+        norm_truth_normalized,
+        1e-14,
+    )
+    for i, label in enumerate(data_cfg.targets_labels):
+        errors['Normalized Error'][label] = normalized_relative_error[i]
+
+    if test_cfg.transforms is not None and test_cfg.transforms.target.normalization is not None:
+        y_truth_physical = transform_pipeline.inverse_transform(
+            tensor=y_truth_normalized,
+            component='target',
+        )
+        y_pred_physical = transform_pipeline.inverse_transform(
+            tensor=y_pred_normalized,
+            component='target',
+        )
+    else:
+        y_truth_physical = y_truth_normalized
+        y_pred_physical = y_pred_normalized
+
+    abs_error_physical = metric(
+        y_truth_physical - y_pred_physical
+    ).detach().cpu().numpy()
+    norm_truth_physical = metric(y_truth_physical).detach().cpu().numpy()
+    physical_relative_error = abs_error_physical / numpy.maximum(
+        norm_truth_physical,
+        1e-14,
+    )
+    for i, label in enumerate(data_cfg.targets_labels):
+        errors['Physical Error'][label] = physical_relative_error[i]
+
+    normalized_msg = '\n'.join(
+        f"{label}: {errors['Normalized Error'][label]:.3%}"
+        for label in data_cfg.targets_labels
+    )
+    physical_msg = '\n'.join(
+        f"{label}: {errors['Physical Error'][label]:.3%}"
+        for label in data_cfg.targets_labels
+    )
     
     
     logger.info(
-        f"Test error: \n{msg}, computed in {duration*1000:.3f} ms.")
+        "Test error (normalized space):\n%s\n"
+        "Test error (physical space):\n%s\n"
+        "computed in %.3f ms.",
+        normalized_msg,
+        physical_msg,
+        duration * 1000,
+    )
 
     data_to_plot = {**{i: j for i, j in data_cfg.data.items()},
-                    'predictions': y_pred.detach().numpy(),
+                    'predictions': y_pred_physical.detach().cpu().numpy(),
                     'branch_output': model.branch(test_transformed[data_cfg.features[0]]).detach().numpy(),
                     'trunk_output': model.trunk(test_transformed[data_cfg.features[1]]).detach().numpy(),
                     'bias': model.bias.bias.detach().numpy()

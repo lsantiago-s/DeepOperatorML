@@ -23,8 +23,9 @@ class DONTrainConfig(TrainConfig):
     device: str | torch.device
     seed: int
     branch_batch_size: int
+    val_branch_batch_size: int
     num_branch_train_samples: int
-    trunk_batch_size: int
+    trunk_batch_size: int | None
     model: DeepONetConfig
     transforms: DONTransformConfig
     strategy: dict
@@ -82,6 +83,8 @@ class DONTrainConfig(TrainConfig):
             'name': train_cfg['training_strategy'],
             'error': train_cfg['error'],
             'loss': train_cfg['loss_function'],
+            'gradient_clip_norm': train_cfg.get('gradient_clip_norm'),
+            'gradient_clip_value': train_cfg.get('gradient_clip_value'),
             'optimizer_scheduler': one_step_optimizer,
             'two_step_optimizer_schedule': multi_step_optimizer,
             'decomposition_type': train_cfg['decomposition_type'],
@@ -117,6 +120,7 @@ class DONTrainConfig(TrainConfig):
             device=device,
             seed=train_cfg["seed"],
             branch_batch_size=train_cfg["branch_batch_size"],
+            val_branch_batch_size=train_cfg.get("val_branch_batch_size", train_cfg["branch_batch_size"]),
             num_branch_train_samples=int(data_cfg.split_ratios[0] * data_cfg.shapes[data_cfg.features[0]][0]),
             trunk_batch_size=train_cfg["trunk_batch_size"],
             model=model_config,

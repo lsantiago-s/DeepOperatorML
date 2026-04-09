@@ -71,6 +71,7 @@ class DeepONetTrainingLoop:
                 'trunk_inner_config': self.strategy._original_trunk_cfg,  # type: ignore[attr-defined]
                 'branch_inner_config': self.strategy._original_branch_cfg,  # type: ignore[attr-defined]
             })
+        self.best_val_loss: float | None = None
 
         # Label map -------------------------------------------------------
         self.label_map = label_map
@@ -154,6 +155,17 @@ class DeepONetTrainingLoop:
                             "loss"},
                     train=False
                 )
+                current_val_loss = val_metrics.get("loss")
+                if current_val_loss is not None and (
+                    self.best_val_loss is None or current_val_loss < self.best_val_loss
+                ):
+                    self.best_val_loss = current_val_loss
+                    self._save_checkpoint("experiment_best.pt")
+                    logger.info(
+                        "New best validation loss %.4e at global epoch %d",
+                        current_val_loss,
+                        global_epoch,
+                    )
 
             self.history.store_learning_rate(
                 phase=self.phases[self.current_phase - 1],
@@ -196,6 +208,7 @@ class DeepONetTrainingLoop:
                 "history": self.history.get_history(),
                 "phase": self.current_phase,
                 "strategy": self.strategy_dict,
+                "best_val_loss": self.best_val_loss,
             },
             exp_path,
         )
@@ -269,6 +282,7 @@ class DeepONetTrainingLoop:
                     "history": self.history.get_history(),
                     "strategy": self.strategy_dict,  #
                     "partial_epoch_metrics": partial_epoch_metrics,
+                    "best_val_loss": self.best_val_loss,
                 },
                 self.checkpoint_dir / "INTERRUPTED.pt",
             )
@@ -343,6 +357,7 @@ class DeepONetTrainingLoop:
                 "history": self.history.get_history(),
                 "strategy": self.strategy_dict,
                 "phase": self.current_phase,
+                "best_val_loss": self.best_val_loss,
             },
             path,
         )

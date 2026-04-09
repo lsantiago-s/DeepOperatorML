@@ -75,7 +75,9 @@ class DeepONetSampler(Sampler):
         Returns:
             int: The total number of batches.
         """
+        branch_batches = (self.num_branch_samples + self.branch_batch_size - 1) // self.branch_batch_size
         if self.trunk_batch_size is not None:
-            return (self.num_branch_samples // self.branch_batch_size) * (self.num_trunk_samples // self.trunk_batch_size)
+            trunk_batches = (self.num_trunk_samples + self.trunk_batch_size - 1) // self.trunk_batch_size
+            return branch_batches * trunk_batches
         else:
-            return (self.num_branch_samples // self.branch_batch_size)
+            return branch_batches

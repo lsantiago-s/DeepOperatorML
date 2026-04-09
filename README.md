@@ -18,8 +18,10 @@ Runnable end-to-end pipelines are available for:
 ## Install
 
 ```bash
-python3 -m pip install -r requirements.txt
+python3 -m pip install -e .
 ```
+
+Python 3.11 or newer is required.
 
 ## Common Commands
 

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:
     from src.modules.models.tools.optimizers.config import OptimizerSpec
 
-@dataclass
+@dataclass(kw_only=True)
 class DONStrategyConfig:
     """
     Base configuration for all training strategies.
@@ -15,6 +15,8 @@ class DONStrategyConfig:
     """
     name: Literal["vanilla", "pod", "two_step"]
     error: str
+    gradient_clip_norm: float | None = None
+    gradient_clip_value: float | None = None
 
     def __post_init__(self):
         """Perform validation after initialization."""
@@ -68,7 +70,7 @@ class DONStrategyConfig:
             error=error,
             name=name
         )
-@dataclass
+@dataclass(kw_only=True)
 class VanillaConfig(DONStrategyConfig):
     """
     Configuration for the standard end-to-end training strategy.
@@ -88,7 +90,7 @@ class VanillaConfig(DONStrategyConfig):
         """Vanilla-specific validation checks."""
         pass
 
-@dataclass
+@dataclass(kw_only=True)
 class TwoStepConfig(DONStrategyConfig):
     """
     Configuration for a two-phase training strategy with trunk decomposition.
@@ -118,7 +120,7 @@ class TwoStepConfig(DONStrategyConfig):
                     raise ValueError(
                         f"Optimizer in {phase} missing 'type' key")
 
-@dataclass
+@dataclass(kw_only=True)
 class PODConfig(DONStrategyConfig):
     """
     Configuration for the Proper Orthogonal Decomposition (POD) training strategy.

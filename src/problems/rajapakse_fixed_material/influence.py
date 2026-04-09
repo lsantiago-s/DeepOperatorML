@@ -1,49 +1,63 @@
-import platform
 import os
+import platform
 from functools import lru_cache
 from pathlib import Path
 from ctypes import CDLL, c_double, c_long, POINTER, byref
+
+
+def _candidate_library_paths(current_dir: Path, system: str) -> list[Path]:
+    override_path = os.environ.get("RAJAPAKSE_AXSGRSCE_LIB")
+    if override_path:
+        return [Path(override_path).expanduser().resolve()]
+
+    if system == 'Windows':
+        lib_name = 'axsgrsce.dll'
+    elif system == 'Darwin':
+        lib_name = 'axsgrsce.dylib'
+    elif system == 'Linux':
+        lib_name = 'axsgrsce.so'
+    else:
+        raise OSError('Unsupported operating system')
+
+    return [current_dir / 'libs' / lib_name]
 
 
 @lru_cache(maxsize=1)
 def load_native_library():
     current_dir = Path(__file__).parent
     system = platform.system()
-    override_path = os.environ.get("RAJAPAKSE_AXSGRSCE_LIB")
+    candidates = _candidate_library_paths(current_dir=current_dir, system=system)
+    missing_paths = [path for path in candidates if not path.exists()]
+    existing_paths = [path for path in candidates if path.exists()]
 
-    if override_path:
-        lib_path = Path(override_path).expanduser().resolve()
-        lib_name = lib_path.name
+    if not existing_paths:
+        searched = "\n".join(str(path) for path in missing_paths)
+        raise FileNotFoundError(
+            "Rajapakse native library not found. Searched:\n"
+            f"{searched}"
+        )
+
+    last_error: OSError | None = None
+    for lib_path in existing_paths:
+        try:
+            lib = CDLL(lib_path)
+            break
+        except OSError as exc:
+            last_error = exc
     else:
-        if system == 'Windows':
-            lib_name = 'axsgrsce.dll'
-        elif system == 'Darwin':
-            lib_name = 'axsgrsce.dylib'
-        elif system == 'Linux':
-            lib_name = 'axsgrsce.so'
-        else:
-            raise OSError('Unsupported operating system')
-
-        lib_path = current_dir / 'libs' / lib_name
-
-    if not lib_path.exists():
-        raise FileNotFoundError(f"Library {lib_name} not found at {lib_path}")
-
-    try:
-        lib = CDLL(lib_path)
-    except OSError as exc:
         libc_name, libc_version = platform.libc_ver()
         runtime_desc = f"{system} with {libc_name or 'libc'} {libc_version or 'unknown'}"
+        searched = "\n".join(str(path) for path in existing_paths)
         raise RuntimeError(
             "Failed to load the Rajapakse native library.\n"
-            f"Library: {lib_path}\n"
             f"Runtime: {runtime_desc}\n"
-            f"Loader error: {exc}\n"
+            f"Tried:\n{searched}\n"
+            f"Last loader error: {last_error}\n"
             "This usually means the bundled shared library was built for a different system "
             "or glibc version than the current machine. Provide a compatible "
             "`axsgrsce.so` for this cluster, rebuild the library on a matching Linux environment, "
             "or set RAJAPAKSE_AXSGRSCE_LIB to a compatible shared library path."
-        ) from exc
+        ) from last_error
 
     lib.axsanisgreen.argtypes = [
         POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double), POINTER(c_double),
