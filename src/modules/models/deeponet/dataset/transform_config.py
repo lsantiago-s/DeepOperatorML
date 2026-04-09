@@ -5,7 +5,7 @@ from typing import Optional, Literal, Dict
 from src.modules.models.deeponet.dataset.feature_expansions import FeatureExpansionConfig
 
 @dataclass
-class ComponentTransformConfig:
+class ComponentDONTransformConfig:
     """
     Configuration for a single component's data transformation pipeline.
 
@@ -25,16 +25,16 @@ class ComponentTransformConfig:
 
 
 @dataclass
-class TransformConfig:
+class DONTransformConfig:
     """
     Holds the complete configuration for all data transformations in the pipeline.
 
     This dataclass contains the transformation configurations for the branch,
     trunk, and target components, as well as the global device and data type.
     """
-    branch: ComponentTransformConfig
-    trunk: ComponentTransformConfig
-    target: ComponentTransformConfig
+    branch: ComponentDONTransformConfig
+    trunk: ComponentDONTransformConfig
+    target: ComponentDONTransformConfig
     device: str | torch.device
     dtype: torch.dtype
 
@@ -46,7 +46,7 @@ class TransformConfig:
                           device: str | torch.device,
                           dtype: torch.dtype):
         """
-        Creates a TransformConfig instance from a training configuration dictionary.
+        Creates a DONTransformConfig instance from a training configuration dictionary.
 
         This method parses dictionaries containing transformation settings to
         build the structured configuration object. It correctly handles cases
@@ -60,7 +60,7 @@ class TransformConfig:
             dtype (torch.dtype): The data type for tensors.
 
         Returns:
-            TransformConfig: The constructed configuration object.
+            DONTransformConfig: The constructed configuration object.
         """
 
         branch_expansion_type, branch_expansion_size = None, None
@@ -77,13 +77,13 @@ class TransformConfig:
                 'size')
 
         return cls(
-            branch=ComponentTransformConfig(normalization=branch_transforms['normalization'],
+            branch=ComponentDONTransformConfig(normalization=branch_transforms['normalization'],
                                             feature_expansion=FeatureExpansionConfig(type=branch_expansion_type,
                                                                                      size=branch_expansion_size)),
-            trunk=ComponentTransformConfig(normalization=trunk_transforms['normalization'],
+            trunk=ComponentDONTransformConfig(normalization=trunk_transforms['normalization'],
                                            feature_expansion=FeatureExpansionConfig(type=trunk_expansion_type,
                                                                                     size=trunk_expansion_size)),
-            target=ComponentTransformConfig(**target_transforms),
+            target=ComponentDONTransformConfig(**target_transforms),
             device=device,
             dtype=dtype
         )
@@ -96,7 +96,7 @@ class TransformConfig:
                         device: str | torch.device,
                         dtype: torch.dtype):
         """
-        Creates a TransformConfig instance from an experiment configuration dictionary.
+        Creates a DONTransformConfig instance from an experiment configuration dictionary.
 
         This method is similar to `from_train_config` but includes the
         `original_dim` for each component, which is typically saved after a model
@@ -110,7 +110,7 @@ class TransformConfig:
             dtype (torch.dtype): The data type for tensors.
 
         Returns:
-            TransformConfig: The constructed configuration object.
+            DONTransformConfig: The constructed configuration object.
         """
         branch_expansion_type, branch_expansion_size = None, None
         trunk_expansion_type, trunk_expansion_size = None, None
@@ -122,7 +122,7 @@ class TransformConfig:
             trunk_expansion_size = trunk_transforms['feature_expansion'].get('size')
 
         return cls(
-            branch=ComponentTransformConfig(
+            branch=ComponentDONTransformConfig(
                 original_dim=branch_transforms['original_dim'],
                 normalization=branch_transforms['normalization'],
                 feature_expansion=FeatureExpansionConfig(
@@ -130,7 +130,7 @@ class TransformConfig:
                                                 size=branch_expansion_size
                             )
                         ),
-            trunk=ComponentTransformConfig(
+            trunk=ComponentDONTransformConfig(
                 original_dim=trunk_transforms['original_dim'],
                 normalization=trunk_transforms['normalization'],
                 feature_expansion=FeatureExpansionConfig(
@@ -138,7 +138,7 @@ class TransformConfig:
                     size=trunk_expansion_size
                             )
                         ),
-            target=ComponentTransformConfig(**target_transforms),
+            target=ComponentDONTransformConfig(**target_transforms),
             device=device,
             dtype=dtype
         )

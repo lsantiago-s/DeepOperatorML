@@ -1,26 +1,26 @@
 # ------------------- Model architecture ------------------
 seed: 42
-training_strategy: two_step
+training_strategy: vanilla
 output_handling: shared_branch
-embedding_dimension: 50
+embedding_dimension: 60
 branch:
   architecture: resnet
   # ---- for MLP ---------
-  activation: silu
-  hidden_layers: [256, 256, 256, 128, 128, 128, 128]
-  dropout_rates: [0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.1, 0.0]
-  batch_normalization: [False, False, False, False, False, False, False, False]
-  layer_normalization: [false, false, false, false, false, false, false, false]
+  activation: gelu
+  hidden_layers: [256, 256, 256, 128, 128, 128, 128, 128]
+  dropout_rates: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  batch_normalization: [False, False, False, False, False, False, False, False, False]
+  layer_normalization: [False, False, False, False, False, False, False, False, False]
   # ---- for KAN ---------
   degree: 8
 trunk:
-  architecture: transformer_encoder
+  architecture: resnet
   # ---- for MLP ---------
-  activation: silu
-  hidden_layers: [256, 256, 256, 128, 128, 128, 128]
-  dropout_rates: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-  batch_normalization: [False, False, False, False, False, False, False, False]
-  layer_normalization: [false, false, false, false, false, false, false, false]
+  activation: gelu
+  hidden_layers: [256, 256, 256, 128, 128, 128, 128, 128]
+  dropout_rates: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  batch_normalization: [False, False, False, False, False, False, False, False, False]
+  layer_normalization: [False, False, False, False, False, False, False, False, False]
   # ---- for KAN ---------
   degree: 8
   # ---- for Transformer ---------
@@ -32,16 +32,16 @@ trunk:
   ff_mult: 4
 bias:
   use_zero_bias: true
-loss_function: ot
+loss_function: mse
 transforms:
   branch:
     normalization: standardize # check if channel-wise
     feature_expansion: null
   trunk:
     normalization: standardize # minmax_0_1, minmax_-1_1, standardize, null
-    feature_expansion: #null
-      type: sin_cos
-      size: 20
+    feature_expansion: null
+      # type: sin_cos
+      # size: 20
 
   target:
     normalization: standardize
@@ -53,14 +53,14 @@ rescaling:
 pod_type: by_channel # stacked or by_channel
 
 # ------------------- Parameters for vanilla / pod training ------------------
-branch_batch_size: 400 # Can't be null
+branch_batch_size: 10 # Can't be null
 trunk_batch_size: null
 error: matrix_fro
 optimizer_schedule:
-  - epochs: 1
+  - epochs: 3000
     optimizer_type: adam
-    learning_rate: 0.0001
-    l2_regularization: 0.00001
+    learning_rate: 0.0004
+    l2_regularization: 0.00000
     # lr_scheduler:
     #   type: step
     #   step_size: 500

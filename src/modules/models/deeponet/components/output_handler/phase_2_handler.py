@@ -1,11 +1,11 @@
 import logging
 import torch
 from typing import TYPE_CHECKING
-from src.modules.models.deeponet.components.output_handler.config import OutputConfig
+from src.modules.models.deeponet.components.output_handler.config import DONOutputConfig
 from src.modules.models.deeponet.components.output_handler.registry import OutputRegistry
 from src.modules.models.deeponet.components.output_handler.protocol import OutputHandler
 if TYPE_CHECKING:
-    from src.modules.models.deeponet.config.deeponet_config import DeepONetConfig
+    from src.modules.models.config.don_config import DeepONetConfig
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ class Phase2Handler(torch.nn.Module):
     A simple, universal handler for combining standardized Phase 2 outputs.
     Crucially, it also adapts a DeepONetConfig for inference-time model loading.
     """
-    def __init__(self, config: 'OutputConfig'): # Must accept a config object
+    def __init__(self, config: 'DONOutputConfig'): # Must accept a config object
         super().__init__()
         self.num_channels = config.num_channels
 

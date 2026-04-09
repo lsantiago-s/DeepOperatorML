@@ -18,6 +18,7 @@ error_label_map = {
 
 loss_label_map = {
     'mse': f'MSE',
+    'mse_complex': f'MSE (complex)',
     'huber': f'Huber',
     'mse_dissipative': '$\\mathcal{L}_{\\lambda}$',
     'wasserstein': f'$W$',

@@ -1,0 +1,5 @@
+data_filename: ./data/raw/ground_vibration/ground_vibration_v2.npz
+real_influence_matrix_data_path: './data/raw/ground_vibration/influence_dataset_N100_samples100_csv/G_samples_real_flat.csv'
+imag_influence_matrix_data_path: './data/raw/ground_vibration/influence_dataset_N100_samples100_csv/G_samples_imag_flat.csv'
+pde_params_data_path: './data/raw/ground_vibration/influence_dataset_N100_samples100_csv/params_array.csv'
+mesh_params_data_path: './data/raw/ground_vibration/influence_dataset_N100_samples100_csv/metadata.json'

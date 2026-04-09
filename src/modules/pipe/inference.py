@@ -6,7 +6,7 @@ from src.modules.pipe.saving import Saver
 from src.modules.models.deeponet.deeponet_factory import DeepONetFactory
 from src.modules.models.deeponet.dataset import preprocessing_utils as dtl
 from src.modules.models.tools.metrics.errors import ERROR_METRICS
-from src.modules.models.deeponet.config import DataConfig, TestConfig
+from src.modules.models.config import DataConfig, TestConfig
 from src.modules.models.deeponet.dataset.deeponet_transform import DeepONetTransformPipeline
 
 logger = logging.getLogger(__name__)

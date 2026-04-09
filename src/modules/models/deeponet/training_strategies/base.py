@@ -7,11 +7,11 @@ from src.modules.models.tools.loss_functions.get_loss_function import get_loss_f
 from src.modules.models.tools.metrics.errors import ERROR_METRICS
 if TYPE_CHECKING:
     from src.modules.models.deeponet.deeponet import DeepONet
-    from src.modules.models.deeponet.config.deeponet_config import DeepONetConfig
-    from src.modules.models.deeponet.training_strategies.config import StrategyConfig
+    from src.modules.models.config.don_config import DeepONetConfig
+    from src.modules.models.deeponet.training_strategies.config import DONStrategyConfig
 
 
-class TrainingStrategy(ABC):
+class DONTrainingStrategy(ABC):
     """
     An abstract base class (ABC) that defines the interface for a training strategy.
 
@@ -20,12 +20,12 @@ class TrainingStrategy(ABC):
     models. Concrete implementations must provide logic for preparing components,
     defining training phases, handling gradients, and calculating metrics.
     """
-    def __init__(self, config: StrategyConfig):
+    def __init__(self, config: DONStrategyConfig):
         """
-        Initializes the TrainingStrategy with a configuration.
+        Initializes the DONTrainingStrategy with a configuration.
 
         Args:
-            config (StrategyConfig): The configuration object for the strategy,
+            config (DONStrategyConfig): The configuration object for the strategy,
                                      specifying the loss and error metrics to use.
         """
         self.config = config

@@ -3,7 +3,7 @@ import logging
 import torch
 from typing import Any
 from src.modules.pipe import inference as inf
-from src.modules.models.deeponet.config import DataConfig, TestConfig
+from src.modules.models.config import DataConfig, TestConfig
 from src.modules.data_processing.postprocessing_helper import run_plotting
 
 logger = logging.getLogger(__name__)

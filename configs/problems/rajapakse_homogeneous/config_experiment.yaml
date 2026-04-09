@@ -1,0 +1,6 @@
+# Replace dataset_version with the hash created by preprocess_data.py
+dataset_version: 00000000
+model: don
+precision: float32
+device: cpu
+output_path: ./output

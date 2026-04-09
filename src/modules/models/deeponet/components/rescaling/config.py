@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 @dataclass
-class RescalingConfig:
+class DONRescalingConfig:
     embedding_dimension: int
     exponent: float
 

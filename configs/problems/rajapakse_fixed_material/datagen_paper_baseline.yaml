@@ -1,0 +1,33 @@
+data_filename: ./data/raw/rajapakse_fixed_material/rajapakse_fixed_paper_baseline.npz
+
+seed: 42
+
+# Rajapakse & Wang (1993) style setup:
+# fixed homogeneous material, varying normalized frequency delta.
+N_r: 40
+N_z: 40
+r_min: 0.0
+z_min: 0.0
+r_max: 10.0
+z_max: 10.0
+
+N: 500
+
+omega_min: 0.0
+omega_max: 5200.0
+load: 6006663.0
+z_source: 0.0
+l_source: 0.0
+r_source: 2.0
+
+E: 2.5e10
+nu: 0.242277267
+damp: 0.01
+dens: 1735.11990
+
+# uzz
+component: 1
+# disk load
+loadtype: 3
+# load over half-space
+bvptype: 2

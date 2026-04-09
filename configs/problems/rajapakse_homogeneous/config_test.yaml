@@ -1,0 +1,20 @@
+precision: float32
+device: cpu
+
+# Location of dataset to test
+experiment_version: 2026-04-08_00-00-00
+
+# Location of outputs (data, metrics)
+output_path: ./output
+processed_data_path: ./data/processed
+
+plot_plane: true
+plot_axis: true
+plot_basis: true
+plot_coefficients: true
+plot_coefficients_mean: true
+plot_reference_parameter: "$\\delta$"
+
+# Plot every X percentile over the reference parameter
+percentiles: 6
+vectors_to_highlight: 4

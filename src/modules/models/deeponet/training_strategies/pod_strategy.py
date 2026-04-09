@@ -3,7 +3,7 @@ import torch
 import logging
 from typing import TYPE_CHECKING, Any
 from src.modules.models.deeponet.training_strategies.config import PODConfig
-from src.modules.models.deeponet.training_strategies.base import TrainingStrategy
+from src.modules.models.deeponet.training_strategies.base import DONTrainingStrategy
 from src.modules.models.tools.metrics.errors import ERROR_METRICS
 from src.modules.models.tools.optimizers.config import OptimizerSpec
 from src.modules.models.tools.optimizers.optimizer_factory import create_optimizer, create_scheduler
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(name=__name__)
 
 
-class PODStrategy(TrainingStrategy):
+class PODStrategy(DONTrainingStrategy):
     """
     Implements a training strategy for DeepONet using Proper Orthogonal Decomposition (POD).
 

@@ -1,0 +1,53 @@
+#  ----------------------Location of .npz data files ----------------
+raw_data_path: ./data/raw/ground_vibration/ground_vibration_v2.npz
+
+# ------------------------- Dataset parameters ----------------
+problem: ground_vibration
+splitting:
+  ratios: [0.8, 0.1, 0.1]
+  seed: 42
+
+data_labels:
+  features: [xb, xt]
+  targets: [g_u]
+
+input_function_keys:  
+  - c44
+  - c11
+  - c33
+  - c13
+  - ρ
+  - ω
+
+input_function_labels:
+  - "$c_{44}$"
+  - "$c_{11}$"
+  - "$c_{33}$"
+  - "$c_{13}$"
+  - "$\\rho$"
+  - "$\\omega$"
+
+coordinate_keys:
+  - x
+
+output_keys:
+  - re_u_xx
+  - re_u_xz
+  - re_u_zx
+  - re_u_zz
+  - im_u_xx
+  - im_u_xz
+  - im_u_zx
+  - im_u_zz
+
+output_labels:
+- $\Re{(\mathbf{u_{xx}})}$
+- $\Re{(\mathbf{u_{xz}})}$
+- $\Re{(\mathbf{u_{zx}})}$
+- $\Re{(\mathbf{u_{zz}})}$
+- $\Im{(\mathbf{u_{xx}})}$
+- $\Im{(\mathbf{u_{xz}})}$
+- $\Im{(\mathbf{u_{zx}})}$
+- $\Im{(\mathbf{u_{zz}})}$
+
+var_share: 0.95

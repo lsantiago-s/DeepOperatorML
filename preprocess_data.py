@@ -19,14 +19,22 @@ def preprocess_data():
     parser = argparse.ArgumentParser()
     parser.add_argument("--problem", required=True,
                         type=str, help="Problem name")
+    parser.add_argument(
+        "--config",
+        required=False,
+        default=None,
+        type=str,
+        help="Optional explicit preprocessing config path. Defaults to configs/problems/<problem>/config_preprocessing.yaml",
+    )
     args = parser.parse_args()
 
     try:
         base_dir = Path(__file__).parent
         script_path = base_dir / 'src' / 'problems' / \
             args.problem / 'problem_dependent_preprocessing.py'
-        config_path = base_dir / 'configs' / 'problems' / \
-            args.problem / 'config_preprocessing.yaml'
+        config_path = Path(args.config) if args.config else (
+            base_dir / 'configs' / 'problems' / args.problem / 'config_preprocessing.yaml'
+        )
         if not base_dir.exists():
             raise FileNotFoundError(f"Problem directory not found: {base_dir}")
         if not script_path.exists():

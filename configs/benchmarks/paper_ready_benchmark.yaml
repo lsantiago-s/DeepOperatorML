@@ -1,0 +1,80 @@
+name: paper_ready_benchmark
+description: >
+  Reproducible benchmark manifest for paper-ready DeepONet experiments across
+  kelvin, rajapakse_fixed_material, ground_vibration and multilayer_horizontal_rocking.
+
+train_configs:
+  don: ./configs/training/config_don_train.yaml
+  fno: ./configs/training/config_fno_train.yaml
+
+required_contract:
+  metrics_files:
+    - baseline_performance_report.yaml
+    - baseline_performance_table.csv
+    - timing_comparison_report.yaml
+  plot_globs:
+    - plots/performance_tracking/*.png
+
+defaults:
+  stability_seeds: [42, 43, 44]
+  reproducibility_tolerance: 1.0e-4
+
+expansion_tracks:
+  fno:
+    status: scaffold_only
+    notes: "Set model_track=fno once src/modules/pipe/fno_train.py is implemented."
+  kelvin_operator:
+    problem: kelvin
+    datagen_config: ./configs/problems/kelvin/datagen_operator.yaml
+    preprocessing_config: ./configs/problems/kelvin/config_preprocessing_operator.yaml
+    experiment_config: ./configs/problems/kelvin/config_experiment_operator.yaml
+    test_config: ./configs/problems/kelvin/config_test_operator.yaml
+    notes: "Operator mapping q(x) -> u(x,y,z) with fixed material scalars."
+  coaraci_gpu:
+    templates_dir: ./scripts/hpc/coaraci
+    notes: "Slurm templates for train/test runs on GPU nodes."
+
+problems:
+  kelvin:
+    enabled: true
+    datagen_config: ./configs/problems/kelvin/datagen.yaml
+    preprocessing_config: ./configs/problems/kelvin/config_preprocessing.yaml
+    experiment_config: ./configs/problems/kelvin/config_experiment.yaml
+    test_config: ./configs/problems/kelvin/config_test.yaml
+    canonical_dataset_version: f83e9497
+    canonical_experiments:
+      don: null
+      fno: null
+
+  rajapakse_fixed_material:
+    enabled: true
+    datagen_config: ./configs/problems/rajapakse_fixed_material/datagen_paper_baseline.yaml
+    preprocessing_config: ./configs/problems/rajapakse_fixed_material/config_preprocessing.yaml
+    experiment_config: ./configs/problems/rajapakse_fixed_material/config_experiment.yaml
+    test_config: ./configs/problems/rajapakse_fixed_material/config_test.yaml
+    canonical_dataset_version: a37f8126
+    canonical_experiments:
+      don: null
+      fno: null
+
+  ground_vibration:
+    enabled: true
+    datagen_config: ./configs/problems/ground_vibration/datagen.yaml
+    preprocessing_config: ./configs/problems/ground_vibration/config_preprocessing.yaml
+    experiment_config: ./configs/problems/ground_vibration/config_experiment.yaml
+    test_config: ./configs/problems/ground_vibration/config_test.yaml
+    canonical_dataset_version: 69c41c0a
+    canonical_experiments:
+      don: 2025-11-10_14-23-36
+      fno: null
+
+  multilayer_horizontal_rocking:
+    enabled: true
+    datagen_config: ./configs/problems/multilayer_horizontal_rocking/datagen_paper_baseline.yaml
+    preprocessing_config: ./configs/problems/multilayer_horizontal_rocking/config_preprocessing.yaml
+    experiment_config: ./configs/problems/multilayer_horizontal_rocking/config_experiment.yaml
+    test_config: ./configs/problems/multilayer_horizontal_rocking/config_test.yaml
+    canonical_dataset_version: ""
+    canonical_experiments:
+      don: null
+      fno: null

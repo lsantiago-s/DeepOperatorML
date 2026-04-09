@@ -1,18 +1,18 @@
 from __future__ import annotations
 import torch
 from src.modules.models.tools.optimizers.config import OptimizerSpec
-from src.modules.models.deeponet.training_strategies.base import TrainingStrategy
+from src.modules.models.deeponet.training_strategies.base import DONTrainingStrategy
 from src.modules.models.tools.metrics.errors import ERROR_METRICS
 from src.modules.models.tools.optimizers.config import OptimizerSpec
 from src.modules.models.tools.optimizers.optimizer_factory import create_optimizer, create_scheduler
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from src.modules.models.deeponet.config.deeponet_config import DeepONetConfig
+    from src.modules.models.config.don_config import DeepONetConfig
     from src.modules.models.deeponet.deeponet import DeepONet
     from src.modules.models.deeponet.training_strategies.config import VanillaConfig
 
 
-class VanillaStrategy(TrainingStrategy):
+class VanillaStrategy(DONTrainingStrategy):
     """
     A simple training strategy for DeepONets.
     

@@ -1,0 +1,47 @@
+# Operator-mode Kelvin dataset: learn q(x) -> displacement field u(x,y,z)
+data_filename: ./data/raw/kelvin/kelvin_operator_qx_v1.npz
+
+seed: 42
+operator_mode: true
+
+# Dataset size
+N: 500
+
+# Fixed material parameters (operator branch varies only with q(x))
+mu_fixed_log10: 7   # mu = 10^7 Pa
+nu_fixed: 0.30
+
+# Distributed load discretization q(x)
+Ns: 33
+x_source_min: -0.10
+x_source_max: 0.10
+source_axis: x
+source_x: 0.0
+source_y: 0.0
+source_z: 0.0
+
+# Piecewise-random q(x) profile sampling
+q_log10_min: 3      # min magnitude 1e3
+q_log10_max: 6      # max magnitude 1e6
+q_num_blocks_min: 2
+q_num_blocks_max: 6
+q_allow_tension: false
+q_noise_std: 0.05
+q_smooth_window: 3
+
+# Optional normalization target for integral |q(x)| dx; null disables normalization
+target_total_abs_load: null
+
+# Evaluation grid
+N_x: 30
+N_y: 30
+N_z: 20
+x_min: -0.1
+x_max: 0.1
+y_min: -0.1
+y_max: 0.1
+z_min: -0.1
+z_max: 0.1
+load_direction: z
+
+scaler: 1

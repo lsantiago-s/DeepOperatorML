@@ -1,5 +1,0 @@
-dataset_version: 938c0a75
-precision: float32
-device: cuda:0
-# output_path: /Volumes/tmh/outputs # Script will create subdirectory with the problem name 'kelvin'.
-output_path: ./output

@@ -1,5 +1,5 @@
 from src.modules.models.deeponet.components.output_handler.protocol import OutputHandler
-from src.modules.models.deeponet.components.output_handler.config import OutputConfig
+from src.modules.models.deeponet.components.output_handler.config import DONOutputConfig
 
 class OutputRegistry:
     _handlers = {}
@@ -12,7 +12,7 @@ class OutputRegistry:
         return decorator
 
     @classmethod
-    def create(cls, config: OutputConfig) -> OutputHandler:
+    def create(cls, config: DONOutputConfig) -> OutputHandler:
         handler_class = cls._handlers.get(config.handler_type)
         if not handler_class:
             raise ValueError(f"Output handler {config.handler_type} not registered")

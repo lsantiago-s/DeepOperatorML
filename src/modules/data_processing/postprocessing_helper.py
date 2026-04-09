@@ -1,7 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
 import importlib.util
-from src.modules.models.deeponet.config import DataConfig, TestConfig
+from src.modules.models.config import DataConfig, TestConfig
 
 def run_plotting(test_cfg: TestConfig, data_cfg: DataConfig) -> None:
     base_dir = Path(__file__).parent.parent.parent

@@ -1,0 +1,8 @@
+# Set dataset_version to the hash created from config_preprocessing_operator.yaml
+dataset_version: __SET_AFTER_PREPROCESS__
+
+model: don
+precision: float32
+device: mps
+
+output_path: ./output

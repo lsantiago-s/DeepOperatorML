@@ -1,15 +1,10 @@
-import os
 import platform
 from pathlib import Path
+from functools import lru_cache
 from ctypes import CDLL, c_double, c_long, POINTER, byref
 
-def influence(c11_val, c12_val, c13_val, c33_val, c44_val,
-               dens_val, damp_val,
-               r_campo_val, z_campo_val,
-               z_fonte_val, r_fonte_val, l_fonte_val,
-               freq_val,
-               bvptype_val, loadtype_val, component_val):
-    
+@lru_cache(maxsize=1)
+def _load_library():
     current_dir = Path(__file__).parent
     system = platform.system()
 
@@ -22,8 +17,8 @@ def influence(c11_val, c12_val, c13_val, c33_val, c44_val,
     else:
         raise OSError('Unsupported operating system')
     
-    lib_path = current_dir / 'libs' / lib_name
-    
+    lib_path = current_dir / "libs" / lib_name
+
     if not lib_path.exists():
         raise FileNotFoundError(f"Library {lib_name} not found at {lib_path}")
 
@@ -39,6 +34,16 @@ def influence(c11_val, c12_val, c13_val, c33_val, c44_val,
         POINTER(c_double), POINTER(c_double) # outputs: resultr and resulti
     ]
     lib.axsanisgreen.restype = None
+    return lib
+
+
+def influence(c11_val, c12_val, c13_val, c33_val, c44_val,
+               dens_val, damp_val,
+               r_campo_val, z_campo_val,
+               z_fonte_val, r_fonte_val, l_fonte_val,
+               freq_val,
+               bvptype_val, loadtype_val, component_val):
+    lib = _load_library()
 
     c11 = c_double(c11_val)
     c12 = c_double(c12_val)

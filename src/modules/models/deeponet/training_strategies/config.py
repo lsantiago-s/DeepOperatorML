@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from src.modules.models.tools.optimizers.config import OptimizerSpec
 
 @dataclass
-class StrategyConfig:
+class DONStrategyConfig:
     """
     Base configuration for all training strategies.
 
@@ -27,9 +27,9 @@ class StrategyConfig:
             raise ValueError(
                 f"Invalid strategy {self.name}. Must be in {valid_names}")
     @classmethod
-    def setup_for_training(cls, train_cfg: dict, data_cfg: dict) -> 'StrategyConfig':
+    def setup_for_training(cls, train_cfg: dict, data_cfg: dict) -> 'DONStrategyConfig':
         """
-        Creates a StrategyConfig instance from training and data dictionaries.
+        Creates a DONStrategyConfig instance from training and data dictionaries.
 
         This factory method is useful for setting up the configuration at the
         start of a training run, extracting the necessary information from
@@ -40,7 +40,7 @@ class StrategyConfig:
             data_cfg (dict): The data configuration dictionary.
 
         Returns:
-            StrategyConfig: A base strategy configuration object.
+            DONStrategyConfig: A base strategy configuration object.
         """
         name = data_cfg["shapes"][data_cfg["targets"][0]][-1]
         error = train_cfg["output_handling"]
@@ -49,9 +49,9 @@ class StrategyConfig:
             name=name
         )
     @classmethod
-    def setup_for_inference(cls, model_cfg_dict) -> 'StrategyConfig':
+    def setup_for_inference(cls, model_cfg_dict) -> 'DONStrategyConfig':
         """
-        Creates a StrategyConfig instance from a saved model configuration.
+        Creates a DONStrategyConfig instance from a saved model configuration.
 
         This method is used to reconstruct the strategy configuration from
         a dictionary loaded from a checkpoint or a saved model file.
@@ -60,7 +60,7 @@ class StrategyConfig:
             model_cfg_dict (dict): The dictionary containing the saved model configuration.
 
         Returns:
-            StrategyConfig: A base strategy configuration object.
+            DONStrategyConfig: A base strategy configuration object.
         """
         name = model_cfg_dict["strategy"]["name"]
         error = model_cfg_dict["strategy"]["error"]
@@ -69,7 +69,7 @@ class StrategyConfig:
             name=name
         )
 @dataclass
-class VanillaConfig(StrategyConfig):
+class VanillaConfig(DONStrategyConfig):
     """
     Configuration for the standard end-to-end training strategy.
 
@@ -89,7 +89,7 @@ class VanillaConfig(StrategyConfig):
         pass
 
 @dataclass
-class TwoStepConfig(StrategyConfig):
+class TwoStepConfig(DONStrategyConfig):
     """
     Configuration for a two-phase training strategy with trunk decomposition.
 
@@ -119,7 +119,7 @@ class TwoStepConfig(StrategyConfig):
                         f"Optimizer in {phase} missing 'type' key")
 
 @dataclass
-class PODConfig(StrategyConfig):
+class PODConfig(DONStrategyConfig):
     """
     Configuration for the Proper Orthogonal Decomposition (POD) training strategy.
 

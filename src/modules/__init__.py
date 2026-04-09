@@ -1,1 +1,1 @@
-from src.modules.pipe import train
+from src.modules.pipe import don_train

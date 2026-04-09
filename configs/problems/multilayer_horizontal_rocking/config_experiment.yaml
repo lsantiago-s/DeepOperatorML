@@ -1,0 +1,5 @@
+dataset_version: cceca2ac
+model: don
+precision: float32
+device: cpu 
+output_path: ./output # Script will create subdirectory with the problem name 'multilayer_horizontal_rocking'.

@@ -4,7 +4,7 @@ import numpy as np
 import dataclasses
 from pathlib import Path
 from typing import Literal
-from src.modules.models.deeponet.dataset.transform_config import TransformConfig, ComponentTransformConfig
+from src.modules.models.deeponet.dataset.transform_config import DONTransformConfig, ComponentDONTransformConfig
 from src.modules.models.deeponet.dataset.feature_expansions import FeatureExpansionConfig, FeatureExpansionRegistry
 
 class DeepONetTransformPipeline:
@@ -16,12 +16,12 @@ class DeepONetTransformPipeline:
     can fit statistics from training data, apply transformations, and
     revert them for post-processing results.
     """
-    def __init__(self, config: TransformConfig):
+    def __init__(self, config: DONTransformConfig):
         """
         Initializes the DeepONetTransformPipeline.
 
         Args:
-            config (TransformConfig): Configuration object specifying the
+            config (DONTransformConfig): Configuration object specifying the
                                       transformation types, device, and data type.
         """
         self.config = config
@@ -243,7 +243,7 @@ class DeepONetTransformPipeline:
         expansion_cfg = getattr(self.config, component).feature_expansion
         if not expansion_cfg or expansion_cfg.type is None:
             return data
-        # Store original dimension on first application
+
         if self.dimension_info[component] is None:
             self.dimension_info[component] = data.shape[-1]
 
@@ -263,11 +263,10 @@ class DeepONetTransformPipeline:
         Returns:
             torch.Tensor: The tensor in its original scale.
         """
-        # Reverse expansion first
+
         if self.dimension_info.get(component):
             tensor = tensor[..., :self.dimension_info[component]]
 
-        # Reverse normalization
         stats = getattr(self, f"{component}_stats")
         norm_type = getattr(self.config, component).normalization
         return self._inverse_normalize(tensor, norm_type, stats)
@@ -347,20 +346,20 @@ class DeepONetTransformPipeline:
             DeepONetTransformPipeline: The loaded and re-initialized pipeline instance.
         """
         state = torch.load(path / "transform_state.pt", map_location=device)
-        config = TransformConfig(
-            branch=ComponentTransformConfig(
+        config = DONTransformConfig(
+            branch=ComponentDONTransformConfig(
                 normalization=state["config"]["branch"]["normalization"],
                 feature_expansion=FeatureExpansionConfig(
                     **state["config"]["branch"]["feature_expansion"])
                 if state["config"]["branch"]["feature_expansion"] else None
             ),
-            trunk=ComponentTransformConfig(
+            trunk=ComponentDONTransformConfig(
                 normalization=state["config"]["trunk"]["normalization"],
                 feature_expansion=FeatureExpansionConfig(
                     **state["config"]["trunk"]["feature_expansion"])
                 if state["config"]["trunk"]["feature_expansion"] else None
             ),
-            target=ComponentTransformConfig(
+            target=ComponentDONTransformConfig(
                 normalization=state["config"]["target"]["normalization"],
                 feature_expansion=FeatureExpansionConfig(
                     **state["config"]["target"]["feature_expansion"])

@@ -15,9 +15,16 @@ logger = logging.getLogger(__name__)
 def gen_data() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--problem", required=True, type=str, help="Problem name")
+    parser.add_argument(
+        "--config",
+        required=False,
+        default=None,
+        type=str,
+        help="Optional explicit datagen config path. Defaults to configs/problems/<problem>/datagen.yaml",
+    )
     args = parser.parse_args()
 
-    config_path = os.path.join("./configs/problems/", args.problem, 'datagen.yaml')
+    config_path = args.config or os.path.join("./configs/problems/", args.problem, 'datagen.yaml')
 
     try:
         generator = ProblemRegistry.get_generator(name=args.problem, config=config_path)

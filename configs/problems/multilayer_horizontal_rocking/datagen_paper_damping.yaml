@@ -1,0 +1,43 @@
+data_filename: ./data/raw/multilayer_horizontal_rocking/multilayer_horizontal_rocking_paper_damping_v2.npz
+executable_path: ./src/problems/multilayer_horizontal_rocking/libs/multilayer.exe
+
+seed: 42
+num_samples: 120
+
+N: 1
+Nload: 1
+B: 0.0
+M: 20
+receiver_interface: 1
+
+codes: [1, 1, 1, 1]
+outputfilename: dontmatter
+
+a_ref: 1.0
+a0:
+  min: 0.05
+  max: 4.0
+
+block_channel_map:
+  uxx: urfx
+  uzx: uzfx
+  uxz: urmy
+  uzz: uzmy
+
+sampling:
+  # Labaki et al. (2013), Section 4.4: medium 1 = case D, medium 2 = case B.
+  mode: paper_case
+  medium1_h: 1.0
+  max_tries_per_medium: 1000
+
+  paper_cases: [DB_DAMPING]
+  paper_case_probabilities: [1.0]
+
+  # Keep c_ij fixed and vary damping.
+  paper_c_jitter_rel: 0.0
+  paper_eta_jitter_abs: 0.095
+  paper_shared_eta_jitter: true
+  paper_rho_jitter_abs: 0.0
+
+max_attempts_per_sample: 20
+solver_timeout_seconds: 300

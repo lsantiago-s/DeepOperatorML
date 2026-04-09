@@ -5,7 +5,7 @@ from tqdm.auto import tqdm
 import matplotlib.pyplot as plt
 from src.problems.kelvin.plot_field import plot_field
 from src.problems.kelvin.plot_basis import plot_basis
-from src.modules.models.deeponet.config import DataConfig, TestConfig
+from src.modules.models.config import DataConfig, TestConfig
 from src.problems.kelvin.plot_coeffs import plot_coefficients, plot_coefficients_mean
 
 logger = logging.getLogger(__file__)
@@ -13,8 +13,10 @@ logger = logging.getLogger(__file__)
 
 def plot_planes_helper(data: dict[str, dict[str, Any]], data_cfg: DataConfig, metadata: dict[str, Any], plot_path: Path):
     percentiles = metadata['percentiles']
-    for_filename = { "$\\nu$": 'ν' , 
-                    "$\\mu$": 'μ'}
+    for_filename = {
+        "$\\nu$": "nu",
+        "$\\mu$": "mu",
+    }
 
     planes = ['xy', 'xz', 'yz']
     variables = ['predictions', 'truths', 'rel_errors']
@@ -42,7 +44,8 @@ def plot_planes_helper(data: dict[str, dict[str, Any]], data_cfg: DataConfig, me
                         plotted_variable=var
                     )
                     val_str = f"{branch_sample_searched[p]:.1E}"
-                    file_name = f"{for_filename[param]}_{percentiles[c] / 100:.0%}_perc_{val_str}.png"
+                    param_token = for_filename.get(param, f"input_{p:02d}")
+                    file_name = f"{param_token}_{percentiles[c] / 100:.0%}_perc_{val_str}.png"
                     fig_plane_path = var_path / file_name
                     fig_plane.savefig(fig_plane_path)
                     plt.close()
@@ -79,8 +82,12 @@ def plot_basis_helper(data: dict[str, Any], data_cfg: DataConfig, plot_path: Pat
 
 def plot_coefficients_helper(data: dict[str, Any], data_cfg: DataConfig, metadata: dict[str, Any], plot_path: Path):
     mask = [i for i in metadata.keys() if i != 'percentiles']
-    for_filename = { "$\\nu$": 'ν' , 
-                    "$\\mu$": 'μ'
+    if len(mask) < 2:
+        logger.warning("Skipping coefficient plots: expected at least 2 branch parameters.")
+        return
+    for_filename = {
+        "$\\nu$": "nu",
+        "$\\mu$": "mu",
     }
     percentiles = metadata['percentiles']
     for param in mask:
@@ -98,7 +105,8 @@ def plot_coefficients_helper(data: dict[str, Any], data_cfg: DataConfig, metadat
                 target_labels=data_cfg.targets_labels
             )
             val_str = f"{sample_map['values'][count]:.3E}"
-            file_name = f"{for_filename[param]}_{percentiles[count]}_perc_{val_str}.png"
+            param_token = for_filename.get(param, f"input_{mask.index(param):02d}")
+            file_name = f"{param_token}_{percentiles[count]}_perc_{val_str}.png"
             fig_coeffs_path = plot_path / file_name
             fig_coeffs.savefig(fig_coeffs_path)
             plt.close()

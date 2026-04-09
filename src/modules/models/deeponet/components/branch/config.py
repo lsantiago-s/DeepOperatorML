@@ -4,11 +4,11 @@ import torch
 from dataclasses import dataclass
 from typing import Literal, Optional, Callable
 from src.modules.models.deeponet.components.registry import ComponentRegistry
-from src.modules.models.deeponet.dataset.transform_config import TransformConfig
+from src.modules.models.deeponet.dataset.transform_config import DONTransformConfig
 from src.modules.models.tools.activation_functions.activation_fns import ACTIVATION_MAP
 
 @dataclass
-class BranchConfig:
+class DONBranchConfig:
     # Fundamental component type
     architecture: Optional[Literal["resnet",
                                    "mlp",
@@ -25,14 +25,14 @@ class BranchConfig:
     layer_normalization: Optional[list[bool]] = None
     activation: Optional[Callable | str] = None
     degree: Optional[int] = None
-    inner_config: Optional[BranchConfig] = None
+    inner_config: Optional[DONBranchConfig] = None
     R_matrix: Optional[torch.Tensor] = None
     num_channels: Optional[int] = None
     is_shared_branch: Optional[bool] = None
 
     @classmethod
-    def setup_for_training(cls, data_cfg: dict, train_cfg: dict) -> "BranchConfig":
-        branch_config = BranchConfig(**train_cfg["branch"])
+    def setup_for_training(cls, data_cfg: dict, train_cfg: dict) -> "DONBranchConfig":
+        branch_config = DONBranchConfig(**train_cfg["branch"])
         if branch_config.activation is not None:
             branch_config.activation = ACTIVATION_MAP[branch_config.activation.lower(
             )]
@@ -41,8 +41,8 @@ class BranchConfig:
         return branch_config
 
     @classmethod
-    def setup_for_inference(cls, model_cfg_dict: dict, transform_cfg: TransformConfig) -> "BranchConfig":
-        branch_config = BranchConfig(**model_cfg_dict["branch"])
+    def setup_for_inference(cls, model_cfg_dict: dict, transform_cfg: DONTransformConfig) -> "DONBranchConfig":
+        branch_config = DONBranchConfig(**model_cfg_dict["branch"])
         if branch_config.activation is not None:
             mask = re.sub(r'[^a-zA-Z0-9]', '', branch_config.activation.lower(
             ))
@@ -55,7 +55,7 @@ class BranchConfig:
                     if transform_cfg.branch.original_dim is not None:
                         branch_config.input_dim = transform_cfg.branch.original_dim * (1 + transform_cfg.branch.feature_expansion.size)
         if model_cfg_dict['strategy']['name'] == 'two_step':
-            branch_config.inner_config = BranchConfig(**model_cfg_dict["branch"]["inner_config"])
+            branch_config.inner_config = DONBranchConfig(**model_cfg_dict["branch"]["inner_config"])
             branch_config.inner_config.num_channels = model_cfg_dict['output']['num_channels']
             mask = re.sub(r'[^a-zA-Z0-9]', '', branch_config.inner_config.activation.lower(
             ))
@@ -67,11 +67,11 @@ class BranchConfig:
         return branch_config
 
 
-class BranchConfigValidator:
+class DONBranchConfigValidator:
     @staticmethod
-    def validate(config: BranchConfig):
+    def validate(config: DONBranchConfig):
         if config.component_type == "orthonormal_branch":
-            BranchConfigValidator._validate_orthonormal(config)
+            DONBranchConfigValidator._validate_orthonormal(config)
             return
         try:
             component_class, required_params = ComponentRegistry.get(
@@ -95,7 +95,7 @@ class BranchConfigValidator:
             raise ValueError("KAN requires degree >= 1")
     
     @staticmethod
-    def _validate_orthonormal(config: BranchConfig):
+    def _validate_orthonormal(config: DONBranchConfig):
         """Special validation for orthonormal branch configuration"""
         errors = []
 
@@ -113,7 +113,7 @@ class BranchConfigValidator:
 
         if hasattr(config, "inner_config") and config.inner_config is not None:
             try:
-                BranchConfigValidator.validate(config.inner_config)
+                DONBranchConfigValidator.validate(config.inner_config)
             except ValueError as e:
                 errors.append(f"Invalid inner branch config: {str(e)}")
 

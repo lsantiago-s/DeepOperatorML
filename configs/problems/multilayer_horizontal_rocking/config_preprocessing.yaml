@@ -1,0 +1,47 @@
+# ---------------------- Location of raw data ----------------
+raw_data_path: ./data/raw/multilayer_horizontal_rocking/multilayer_horizontal_rocking_paper_baseline_v2.npz
+
+# ------------------------- Dataset parameters ----------------
+problem: multilayer_horizontal_rocking
+splitting:
+  ratios: [0.8, 0.1, 0.1]
+  seed: 42
+
+data_labels:
+  features: [xb, xt]
+  targets: [g_u]
+
+# Branch input is the 15D vector [p^(1), p^(2), a0].
+input_function_keys:
+  - xb
+
+input_function_labels:
+  - '$c_{11}^{(1)}$'
+  - '$c_{12}^{(1)}$'
+  - '$c_{13}^{(1)}$'
+  - '$c_{33}^{(1)}$'
+  - '$c_{44}^{(1)}$'
+  - '$\eta^{(1)}$'
+  - '$\rho^{(1)}$'
+  - '$c_{11}^{(2)}$'
+  - '$c_{12}^{(2)}$'
+  - '$c_{13}^{(2)}$'
+  - '$c_{33}^{(2)}$'
+  - '$c_{44}^{(2)}$'
+  - '$\eta^{(2)}$'
+  - '$\rho^{(2)}$'
+  - '$a_0$'
+
+coordinate_keys:
+  - xt
+
+# Target is the full complex U matrix flattened on xt.
+output_keys:
+  - re_u
+  - im_u
+
+output_labels:
+  - '$\Re(U)$'
+  - '$\Im(U)$'
+
+var_share: 0.95
