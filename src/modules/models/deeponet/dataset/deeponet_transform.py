@@ -220,11 +220,28 @@ class DeepONetTransformPipeline:
         elif norm_type is not None and not stats:
             raise RuntimeError(f"{norm_type} expects non-empty 'stats'")
         if norm_type == "standardize":
-            return (data - stats["mean"]) / stats["std"]
+            safe_std = torch.where(
+                torch.abs(stats["std"]) > torch.finfo(stats["std"].dtype).eps,
+                stats["std"],
+                torch.ones_like(stats["std"]),
+            )
+            return (data - stats["mean"]) / safe_std
         if norm_type == "minmax_0_1":
-            return (data - stats["min"]) / (stats["max"] - stats["min"])
+            data_range = stats["max"] - stats["min"]
+            safe_range = torch.where(
+                torch.abs(data_range) > torch.finfo(data_range.dtype).eps,
+                data_range,
+                torch.ones_like(data_range),
+            )
+            return (data - stats["min"]) / safe_range
         if norm_type == "minmax_-1_1":
-            return 2 * (data - stats["min"]) / (stats["max"] - stats["min"]) - 1
+            data_range = stats["max"] - stats["min"]
+            safe_range = torch.where(
+                torch.abs(data_range) > torch.finfo(data_range.dtype).eps,
+                data_range,
+                torch.ones_like(data_range),
+            )
+            return 2 * (data - stats["min"]) / safe_range - 1
         return data
 
     def _apply_expansion(self, data: torch.Tensor, component: Literal["trunk", "branch", "target"]) -> torch.Tensor:

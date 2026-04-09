@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,18 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"Expected mapping in YAML file: {path}")
     return data
+
+
+def _generate_dataset_version(raw_data_path: Path, preprocessing_cfg: dict[str, Any]) -> str:
+    hash_obj = hashlib.sha256()
+    hash_obj.update(raw_data_path.name.encode())
+    problem_config_yaml = yaml.safe_dump(
+        preprocessing_cfg["splitting"] | preprocessing_cfg["data_labels"],
+        sort_keys=True,
+        allow_unicode=True,
+    )
+    hash_obj.update(problem_config_yaml.encode())
+    return hash_obj.hexdigest()[:8]
 
 
 def _dump_yaml(path: Path, data: dict[str, Any]) -> None:
@@ -77,6 +90,33 @@ def _missing_datagen_inputs(datagen_cfg_path: Path, repo_root: Path) -> tuple[li
     return missing, raw_output
 
 
+def _expected_processed_dir(
+    *,
+    problem: str,
+    preprocessing_cfg_path: Path,
+    repo_root: Path,
+) -> Path:
+    preprocessing_cfg = _load_yaml(preprocessing_cfg_path)
+    raw_data_path = _resolve_config_path(
+        str(preprocessing_cfg["raw_data_path"]),
+        config_path=preprocessing_cfg_path,
+        repo_root=repo_root,
+    )
+    dataset_version = _generate_dataset_version(raw_data_path, preprocessing_cfg)
+    return repo_root / "data" / "processed" / problem / dataset_version
+
+
+def _processed_dataset_ready(path: Path) -> bool:
+    required = (
+        "data.npz",
+        "split_indices.npz",
+        "scalers.npz",
+        "pod.npz",
+        "metadata.yaml",
+    )
+    return path.is_dir() and all((path / name).exists() for name in required)
+
+
 def _normalize_command(raw_cmd: Any) -> list[str]:
     if not isinstance(raw_cmd, list) or not raw_cmd:
         raise ValueError("external_datagen_command must be a non-empty list of strings.")
@@ -125,6 +165,16 @@ def main() -> None:
         action="store_true",
         help="After training, write latest output experiment folder into config_test.yaml.",
     )
+    parser.add_argument(
+        "--force-gen",
+        action="store_true",
+        help="Run datagen even if the configured raw dataset file already exists.",
+    )
+    parser.add_argument(
+        "--force-preprocess",
+        action="store_true",
+        help="Run preprocessing even if the expected processed dataset artifacts already exist.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print commands without executing.")
     args = parser.parse_args()
 
@@ -166,15 +216,24 @@ def main() -> None:
         print(f"\n=== Problem: {problem} | Track: {args.model_track} ===")
         datagen_cfg_path = (repo_root / str(cfg["datagen_config"])).resolve()
         datagen_cfg = str(datagen_cfg_path)
-        preprocessing_cfg = str((repo_root / str(cfg["preprocessing_config"])).resolve())
+        preprocessing_cfg_path = (repo_root / str(cfg["preprocessing_config"])).resolve()
+        preprocessing_cfg = str(preprocessing_cfg_path)
         exp_cfg_path = (repo_root / str(cfg["experiment_config"])).resolve()
         test_cfg_path = (repo_root / str(cfg["test_config"])).resolve()
         exp_cfg_path_str = str(exp_cfg_path)
         test_cfg_path_str = str(test_cfg_path)
         run_gen_for_problem = do_gen
+        expected_processed_dir = _expected_processed_dir(
+            problem=problem,
+            preprocessing_cfg_path=preprocessing_cfg_path,
+            repo_root=repo_root,
+        )
 
         if do_gen:
             missing_inputs, raw_output = _missing_datagen_inputs(datagen_cfg_path, repo_root)
+            if raw_output is not None and raw_output.exists() and not args.force_gen:
+                print(f"[SKIP gen] {problem}: reusing existing raw dataset at {raw_output}.")
+                run_gen_for_problem = False
             if missing_inputs:
                 external_cmd_cfg = cfg.get("external_datagen_command", None)
                 if external_cmd_cfg is not None:
@@ -222,19 +281,25 @@ def main() -> None:
             )
 
         if do_preprocess:
-            _run_cmd(
-                [
-                    "python3",
-                    "preprocess_data.py",
-                    "--problem",
-                    problem,
-                    "--config",
-                    preprocessing_cfg,
-                ],
-                dry_run=args.dry_run,
-            )
+            if _processed_dataset_ready(expected_processed_dir) and not args.force_preprocess:
+                print(
+                    f"[SKIP preprocess] {problem}: reusing existing processed dataset "
+                    f"at {expected_processed_dir}."
+                )
+            else:
+                _run_cmd(
+                    [
+                        "python3",
+                        "preprocess_data.py",
+                        "--problem",
+                        problem,
+                        "--config",
+                        preprocessing_cfg,
+                    ],
+                    dry_run=args.dry_run,
+                )
             if args.freeze_dataset_version:
-                latest_dataset = _latest_dir(repo_root / "data" / "processed" / problem).name
+                latest_dataset = expected_processed_dir.name
                 exp_cfg = _load_yaml(exp_cfg_path)
                 exp_cfg["dataset_version"] = latest_dataset
                 if args.model_track:

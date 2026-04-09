@@ -75,6 +75,14 @@ optimizer_schedule:
     #   type: step
     #   step_size: 500
     #   gamma: 0.7
+  - epochs: 5000
+    optimizer_type: adam
+    learning_rate: 0.00007
+    l2_regularization: 0.00001
+    lr_scheduler:
+      type: step
+      step_size: 1000
+      gamma: 0.7
 
 # ------------------- Parameters for two step training ------------------
 decomposition_type: svd

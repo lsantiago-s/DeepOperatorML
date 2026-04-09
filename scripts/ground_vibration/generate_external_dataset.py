@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
 import time
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
@@ -232,6 +233,145 @@ def write_dataset_bundle(
         json.dump(metadata, f, indent=2)
 
 
+def _write_json_atomic(path: Path, payload: dict) -> None:
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    os.replace(tmp_path, path)
+
+
+def _sample_file(path: Path, sample_idx: int) -> Path:
+    return path / f"sample_{sample_idx:05d}.npz"
+
+
+def _signature(args: argparse.Namespace) -> dict[str, object]:
+    return {
+        "n_samples": int(args.n_samples),
+        "n_points": int(args.n_points),
+        "half_span": float(args.half_span),
+        "lty": int(args.lty),
+        "z_source": float(args.z_source),
+        "z_field": float(args.z_field),
+        "damping": float(args.damping),
+        "seed": int(args.seed),
+        "abs_tol": float(args.abs_tol),
+        "c44_min": float(args.c44_min),
+        "c44_max": float(args.c44_max),
+        "c11_ratio_min": float(args.c11_ratio_min),
+        "c11_ratio_max": float(args.c11_ratio_max),
+        "c33_ratio_min": float(args.c33_ratio_min),
+        "c33_ratio_max": float(args.c33_ratio_max),
+        "c13_ratio_min": float(args.c13_ratio_min),
+        "c13_ratio_max": float(args.c13_ratio_max),
+        "rho_min": float(args.rho_min),
+        "rho_max": float(args.rho_max),
+        "freq_min": float(args.freq_min),
+        "freq_max": float(args.freq_max),
+    }
+
+
+def _signature_hash(signature: dict[str, object]) -> str:
+    return hashlib.sha256(json.dumps(signature, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
+
+def _load_completed_samples(
+    partials_dir: Path,
+    g_samples: np.ndarray,
+    sample_times: np.ndarray,
+) -> np.ndarray:
+    completed = np.zeros((g_samples.shape[0],), dtype=bool)
+    for sample_path in sorted(partials_dir.glob("sample_*.npz")):
+        with np.load(sample_path) as data:
+            idx = int(data["sample_idx"])
+            g_samples[idx] = data["g_full"]
+            sample_times[idx] = float(data["elapsed"])
+            completed[idx] = True
+    return completed
+
+
+def _write_sample_checkpoint(partials_dir: Path, sample_idx: int, g_full: np.ndarray, elapsed: float) -> None:
+    sample_path = _sample_file(partials_dir, sample_idx)
+    tmp_path = partials_dir / f".sample_{sample_idx:05d}.tmp.npz"
+    np.savez(tmp_path, sample_idx=sample_idx, elapsed=elapsed, g_full=g_full)
+    os.replace(tmp_path, sample_path)
+
+
+def _print_progress(
+    *,
+    completed_count: int,
+    total_samples: int,
+    started_at: float,
+    sample_times: np.ndarray,
+    resumed_count: int,
+    max_workers: int,
+) -> None:
+    elapsed_wall = time.perf_counter() - started_at
+    done_times = sample_times[:completed_count]
+    mean_sample = float(np.mean(done_times)) if completed_count else 0.0
+    remaining = max(total_samples - completed_count, 0)
+    parallel_efficiency = max(max_workers, 1)
+    eta_seconds = (remaining * mean_sample) / parallel_efficiency if completed_count else float("nan")
+    eta_msg = f"{eta_seconds / 3600:.2f} h" if np.isfinite(eta_seconds) else "unknown"
+    print(
+        (
+            f"[progress] {completed_count}/{total_samples} samples "
+            f"({completed_count / max(total_samples, 1):.1%}) | "
+            f"wall={elapsed_wall / 3600:.2f} h | "
+            f"mean_sample={mean_sample:.1f} s | "
+            f"eta~{eta_msg} | resumed={resumed_count} | workers={max_workers}"
+        ),
+        flush=True,
+    )
+
+
+def _write_progress_file(
+    *,
+    progress_path: Path,
+    completed_count: int,
+    total_samples: int,
+    started_at: float,
+    sample_times: np.ndarray,
+    resumed_count: int,
+    max_workers: int,
+    signature_hash: str,
+    status: str,
+) -> None:
+    elapsed_wall = time.perf_counter() - started_at
+    done_times = sample_times[:completed_count]
+    mean_sample = float(np.mean(done_times)) if completed_count else None
+    remaining = max(total_samples - completed_count, 0)
+    eta_seconds = None
+    if completed_count and mean_sample is not None:
+        eta_seconds = float((remaining * mean_sample) / max(max_workers, 1))
+    _write_json_atomic(
+        progress_path,
+        {
+            "status": status,
+            "signature_hash": signature_hash,
+            "completed_samples": completed_count,
+            "total_samples": total_samples,
+            "fraction_complete": completed_count / max(total_samples, 1),
+            "elapsed_wall_s": float(elapsed_wall),
+            "mean_sample_s": mean_sample,
+            "eta_s": eta_seconds,
+            "resumed_samples": resumed_count,
+            "max_workers": int(max_workers),
+            "updated_at_epoch_s": time.time(),
+        },
+    )
+
+
+def _final_bundle_exists(out_dir: Path) -> bool:
+    required = (
+        "G_samples_real_flat.csv",
+        "G_samples_imag_flat.csv",
+        "params_array.csv",
+        "sample_times.csv",
+        "metadata.json",
+    )
+    return all((out_dir / name).exists() for name in required)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate ground-vibration external CSV bundle.")
     parser.add_argument(
@@ -266,12 +406,29 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rho-max", type=float, default=3000.0)
     parser.add_argument("--freq-min", type=float, default=10.0)
     parser.add_argument("--freq-max", type=float, default=200.0)
+    parser.add_argument(
+        "--progress-every",
+        type=int,
+        default=5,
+        help="Print and checkpoint progress every N completed samples.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     out_dir = Path(args.out_dir).resolve()
+    partials_dir = out_dir / "partials"
+    progress_path = out_dir / "progress.json"
+    signature_path = out_dir / "checkpoint_signature.json"
+
+    if _final_bundle_exists(out_dir):
+        print(f"Final dataset bundle already exists at {out_dir}; nothing to do.", flush=True)
+        return
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    partials_dir.mkdir(parents=True, exist_ok=True)
+
     if args.max_workers <= 0:
         slurm_cpus = os.environ.get("SLURM_CPUS_PER_TASK")
         if slurm_cpus is not None:
@@ -280,6 +437,19 @@ def main() -> None:
             max_workers = max(os.cpu_count() or 1, 1)
     else:
         max_workers = args.max_workers
+
+    signature = _signature(args)
+    signature_hash = _signature_hash(signature)
+    if signature_path.exists():
+        with open(signature_path, "r", encoding="utf-8") as f:
+            existing_signature = json.load(f)
+        if existing_signature.get("signature_hash") != signature_hash:
+            raise RuntimeError(
+                f"Checkpoint directory {out_dir} contains partial samples from a different configuration. "
+                "Use a different --out-dir or clear the partial checkpoints first."
+            )
+    else:
+        _write_json_atomic(signature_path, {"signature_hash": signature_hash, "signature": signature})
 
     params_array = sample_parameters(
         n_samples=args.n_samples,
@@ -340,17 +510,104 @@ def main() -> None:
     start = time.perf_counter()
     g_samples = np.zeros((args.n_samples, 2 * args.n_points, 2 * args.n_points), dtype=np.complex128)
     sample_times = np.zeros((args.n_samples,), dtype=float)
+    completed_mask = _load_completed_samples(partials_dir, g_samples, sample_times)
+    resumed_count = int(np.count_nonzero(completed_mask))
+    completed_count = resumed_count
+
+    if resumed_count:
+        print(
+            f"Resuming dataset generation from {out_dir}: found {resumed_count}/{args.n_samples} completed samples.",
+            flush=True,
+        )
+    else:
+        print(
+            f"Starting dataset generation in {out_dir} with {args.n_samples} samples, "
+            f"{args.n_points} points, and {max_workers} worker(s).",
+            flush=True,
+        )
+
+    _write_progress_file(
+        progress_path=progress_path,
+        completed_count=completed_count,
+        total_samples=args.n_samples,
+        started_at=start,
+        sample_times=sample_times[completed_mask],
+        resumed_count=resumed_count,
+        max_workers=max_workers,
+        signature_hash=signature_hash,
+        status="running",
+    )
+
+    pending_tasks = [task for task in tasks if not completed_mask[task[0]]]
 
     if max_workers <= 1:
-        for task in tasks:
+        for task in pending_tasks:
             idx, g_full, elapsed = compute_sample(*task)
             g_samples[idx] = g_full
             sample_times[idx] = elapsed
+            completed_mask[idx] = True
+            _write_sample_checkpoint(partials_dir, idx, g_full, elapsed)
+            completed_count += 1
+            if (
+                completed_count == args.n_samples
+                or completed_count == resumed_count + 1
+                or completed_count % max(args.progress_every, 1) == 0
+            ):
+                done_times = sample_times[completed_mask]
+                _print_progress(
+                    completed_count=completed_count,
+                    total_samples=args.n_samples,
+                    started_at=start,
+                    sample_times=done_times,
+                    resumed_count=resumed_count,
+                    max_workers=max_workers,
+                )
+                _write_progress_file(
+                    progress_path=progress_path,
+                    completed_count=completed_count,
+                    total_samples=args.n_samples,
+                    started_at=start,
+                    sample_times=done_times,
+                    resumed_count=resumed_count,
+                    max_workers=max_workers,
+                    signature_hash=signature_hash,
+                    status="running",
+                )
     else:
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            for idx, g_full, elapsed in executor.map(compute_sample_star, tasks):
+            futures = {executor.submit(compute_sample_star, task): task[0] for task in pending_tasks}
+            for future in as_completed(futures):
+                idx, g_full, elapsed = future.result()
                 g_samples[idx] = g_full
                 sample_times[idx] = elapsed
+                completed_mask[idx] = True
+                _write_sample_checkpoint(partials_dir, idx, g_full, elapsed)
+                completed_count += 1
+                if (
+                    completed_count == args.n_samples
+                    or completed_count == resumed_count + 1
+                    or completed_count % max(args.progress_every, 1) == 0
+                ):
+                    done_times = sample_times[completed_mask]
+                    _print_progress(
+                        completed_count=completed_count,
+                        total_samples=args.n_samples,
+                        started_at=start,
+                        sample_times=done_times,
+                        resumed_count=resumed_count,
+                        max_workers=max_workers,
+                    )
+                    _write_progress_file(
+                        progress_path=progress_path,
+                        completed_count=completed_count,
+                        total_samples=args.n_samples,
+                        started_at=start,
+                        sample_times=done_times,
+                        resumed_count=resumed_count,
+                        max_workers=max_workers,
+                        signature_hash=signature_hash,
+                        status="running",
+                    )
 
     total_time = time.perf_counter() - start
     metadata["total_time_s"] = float(total_time)
@@ -366,8 +623,27 @@ def main() -> None:
         sample_times=sample_times,
     )
 
-    print(f"Wrote dataset bundle to {out_dir}")
-    print(f"Total runtime: {total_time:.2f} s | mean per sample: {np.mean(sample_times):.2f} s")
+    _write_progress_file(
+        progress_path=progress_path,
+        completed_count=args.n_samples,
+        total_samples=args.n_samples,
+        started_at=start,
+        sample_times=sample_times,
+        resumed_count=resumed_count,
+        max_workers=max_workers,
+        signature_hash=signature_hash,
+        status="completed",
+    )
+
+    for sample_path in partials_dir.glob("sample_*.npz"):
+        sample_path.unlink()
+    try:
+        partials_dir.rmdir()
+    except OSError:
+        pass
+
+    print(f"Wrote dataset bundle to {out_dir}", flush=True)
+    print(f"Total runtime: {total_time:.2f} s | mean per sample: {np.mean(sample_times):.2f} s", flush=True)
 
 
 if __name__ == "__main__":

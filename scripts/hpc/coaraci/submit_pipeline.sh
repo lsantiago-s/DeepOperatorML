@@ -22,6 +22,8 @@ NTASKS_PER_NODE=""
 GPUS="3"
 FREEZE_DATASET="1"
 FREEZE_EXPERIMENT="1"
+FORCE_GEN="0"
+FORCE_PREPROCESS="0"
 SKIP_LIMIT_CHECK="0"
 DRY_RUN="0"
 
@@ -45,6 +47,8 @@ Options:
   --gpus <int>                       GPUs for gpu-x queue (default: 3)
   --no-freeze-dataset                Disable --freeze-dataset-version
   --no-freeze-experiment             Disable --freeze-experiment-version
+  --force-gen                        Regenerate raw dataset even if it already exists
+  --force-preprocess                 Re-run preprocessing even if processed artifacts already exist
   --skip-limit-check                 Skip per-queue active-job limit check
   --dry-run                          Print sbatch command and generated job script
   -h, --help                         Show this help
@@ -67,6 +71,8 @@ while [[ $# -gt 0 ]]; do
     --gpus) GPUS="$2"; shift 2 ;;
     --no-freeze-dataset) FREEZE_DATASET="0"; shift ;;
     --no-freeze-experiment) FREEZE_EXPERIMENT="0"; shift ;;
+    --force-gen) FORCE_GEN="1"; shift ;;
+    --force-preprocess) FORCE_PREPROCESS="1"; shift ;;
     --skip-limit-check) SKIP_LIMIT_CHECK="1"; shift ;;
     --dry-run) DRY_RUN="1"; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -142,6 +148,12 @@ if [[ "${FREEZE_DATASET}" == "1" ]]; then
 fi
 if [[ "${FREEZE_EXPERIMENT}" == "1" ]]; then
   PIPE_CMD+=(--freeze-experiment-version)
+fi
+if [[ "${FORCE_GEN}" == "1" ]]; then
+  PIPE_CMD+=(--force-gen)
+fi
+if [[ "${FORCE_PREPROCESS}" == "1" ]]; then
+  PIPE_CMD+=(--force-preprocess)
 fi
 
 JOB_SCRIPT="$(mktemp "/tmp/deepop_pipeline_${QUEUE}_XXXXXX")"
