@@ -2,6 +2,7 @@ import yaml
 import json
 import logging
 import numpy as np
+import time
 from typing import Any
 from pathlib import Path
 from src.problems.base_generator import BaseProblemGenerator
@@ -88,6 +89,7 @@ class GroundVibrationProblemGenerator(BaseProblemGenerator):
         return channels.reshape(num_samples, n_nodes * n_nodes, 4)
     
     def generate(self):
+        start = time.perf_counter()
         pde_params_data = np.loadtxt(self.config['pde_params_data_path'], delimiter=',')
         mesh_params_data = json.load(open(self.config['mesh_params_data_path'], 'r'))['x_positions']
         real_matrix_data = np.loadtxt(self.config['real_influence_matrix_data_path'], delimiter=',')
@@ -121,7 +123,10 @@ class GroundVibrationProblemGenerator(BaseProblemGenerator):
             influence_tensor - influence_tensor.transpose(0, 2, 1, 3)[..., [0, 2, 1, 3]]
         ) / (np.linalg.norm(influence_tensor) + 1e-30)
         
+        duration = time.perf_counter() - start
         metadata = {
+            "runtime_s": float(duration),
+            "runtime_ms": float(duration * 1e3),
             "pde_samples": {
                 "c11": {
                     "shape": len(pde_samples),

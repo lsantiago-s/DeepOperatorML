@@ -1,0 +1,40 @@
+# ----------------------Location of .npz data files ----------------
+raw_data_path: ./data/raw/kelvin/kelvin_operator_qx_v1.npz
+
+# ------------------------- Dataset parameters ----------------
+problem: kelvin
+splitting:
+  ratios: [0.8, 0.1, 0.1]
+  seed: 42
+
+data_labels:
+  features: [xb, xt]
+  targets: [g_u]
+
+# q is stored as an array with shape (N, Ns)
+input_function_keys:
+  - q
+
+# Labels for branch-parameter diagnostic plots; model still receives full q vector.
+input_function_labels:
+  - "$q_0$"
+  - "$q_1$"
+
+coordinate_keys:
+  - x
+  - y
+  - z
+
+output_keys:
+  - g_u_x
+  - g_u_y
+  - g_u_z
+
+output_labels:
+  - "$u_x$"
+  - "$u_y$"
+  - "$u_z$"
+
+load_direction: z
+
+var_share: 0.95

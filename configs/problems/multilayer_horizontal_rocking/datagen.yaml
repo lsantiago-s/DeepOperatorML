@@ -1,52 +1,63 @@
-data_filename: ./data/raw/multilayer_horizontal_rocking/multilayer_horizontal_rocking_v1.npz
+data_filename: ./data/raw/multilayer_horizontal_rocking/multilayer_horizontal_rocking_v2_bimaterial.npz
 executable_path: ./src/problems/multilayer_horizontal_rocking/libs/multilayer.exe
 
 seed: 42
-num_samples: 20
+num_samples: 120
 
-# Number of layers (solver reads N+1 rows including semi-space).
-N: 3
+# Bi-material formulation: medium 1 + medium 2 half-space (N=1 => N+1 rows in INPUT)
+N: 1
 Nload: 1
 B: 0.0
-M: 4
+M: 20
 receiver_interface: 1
 
-# Legacy Fortran INPUT has four CODE flags; current solver output includes
-# URFx, UZFx, URMy, UZMy and the added UZZ channel.
 codes: [1, 1, 1, 1]
-outputfilename: doesntmatter
+outputfilename: dontmatter
 
-omega:
-  min: 0.001
-  max: 4.01
+# Non-dimensional frequency and conversion omega = a0 * cS1 / a_ref
+a_ref: 1.0
+a0:
+  min: 0.05
+  max: 4.0
+
+# Mapping from solver channels to coupled blocks in U = [[Uxx,Uxz],[Uzx,Uzz]]
+block_channel_map:
+  uxx: urfx
+  uzx: uzfx
+  uxz: urmy
+  uzz: uzmy
 
 sampling:
-  # 'random' (default): independent uniform random sampling by layer.
-  # 'paper_case': sample deterministic layered cases A/B/C from Labaki et al. (2014).
   mode: random
+  max_tries_per_medium: 1000
 
-  # Transversely isotropic stiffness-like ranges.
-  c11: [2.0, 6.0]
-  c12: [0.5, 3.0]
-  c13: [0.5, 3.0]
-  c33: [2.0, 6.0]
-  c44: [0.8, 2.5]
+  # Legacy solver still expects top medium thickness; this is fixed and not part of branch input.
+  medium1_h: 1.0
 
-  # Damping, density and thickness.
-  eta: [0.005, 0.10]
-  rho: [0.8, 2.5]
-  h: [0.2, 1.0]
+  medium1:
+    c11: [2.0, 6.0]
+    c12: [0.5, 3.0]
+    c13: [0.5, 3.0]
+    c33: [2.0, 6.0]
+    c44: [0.8, 2.5]
+    eta: [0.005, 0.08]
+    rho: [0.8, 2.0]
 
-  # Dummy thickness for the semi-space row (last row).
-  semi_space_h: 0.0
-  max_tries_per_layer: 1000
+  medium2:
+    c11: [2.0, 6.0]
+    c12: [0.5, 3.0]
+    c13: [0.5, 3.0]
+    c33: [2.0, 6.0]
+    c44: [0.8, 2.5]
+    eta: [0.005, 0.08]
+    rho: [0.8, 2.0]
 
-  # Used only when mode=paper_case.
+  # Optional paper-case params (used only when mode=paper_case)
   paper_cases: [A, B, C]
   paper_case_probabilities: [0.3333333333, 0.3333333333, 0.3333333334]
   paper_c_jitter_rel: 0.0
   paper_eta_jitter_abs: 0.0
   paper_rho_jitter_abs: 0.0
-  paper_h_jitter_abs: 0.0
 
+max_attempts_per_sample: 20
 solver_timeout_seconds: 300

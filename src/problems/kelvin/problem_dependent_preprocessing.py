@@ -8,7 +8,21 @@ logger = logging.getLogger(__name__)
 
 
 def input_function_encoding(input_funcs: Iterable[Iterable | npt.NDArray], encoding=None) -> npt.NDArray:
-    return np.column_stack(tup=input_funcs)  # type: ignore
+    del encoding
+    arrays = [np.asarray(x) for x in input_funcs]
+    if not arrays:
+        raise ValueError("At least one input function key must be provided.")
+
+    columns: list[np.ndarray] = []
+    for arr in arrays:
+        if arr.ndim == 1:
+            columns.append(arr[:, None])
+        elif arr.ndim == 2:
+            columns.append(arr)
+        else:
+            raise ValueError(f"Unsupported input function shape: {arr.shape}")
+
+    return np.concatenate(columns, axis=1)
 
 
 def format_to_don(*coords: Iterable[npt.ArrayLike]) -> npt.NDArray:

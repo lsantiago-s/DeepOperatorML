@@ -1,82 +1,98 @@
-# Multilayer Horizontal Rocking (estado atual no repositório)
+# Multilayer Horizontal Rocking (formulação bi-material completa)
 
-Este problema usa o solver Fortran em `libs/` para gerar respostas complexas de deslocamento em solo estratificado transversalmente isotrópico.
+Este problema foi ajustado para a formulação de **solo não homogêneo bi-material** com aprendizado da matriz de influência completa:
 
-## Formato de entrada (`INPUT.TXT`)
-```
+- entrada: `s = [p^(1), p^(2), a0]` com **15 dimensões**
+- saída: matriz complexa `U ∈ C^(2M x 2M)` com blocos `Uxx, Uxz, Uzx, Uzz`
+
+## Entrada do solver Fortran
+
+O solver legado ainda lê `INPUT.TXT` no formato:
+
+```text
 omegai omegaf omegainc
 N Nload B M outputfilename
 CODExx CODExf CODEfx CODEff
 (N+1 linhas de propriedades)
-c11 c12 c13 c33 c44 eta rho hn
+c11 c12 c13 c33 c44 eta rho h
 ```
 
-- `N`: número de camadas (o solver lê `N+1` linhas, sendo a última o semi-espaço).
-- `Nload`: interface onde a carga é aplicada (`1` = superfície).
-- `B`: raio interno da carga anelar (`B=0` para carga circular).
-- `M`: discretização radial (afeta loops `I` e `J` no solver).
-- `CODE..`: flags das quatro componentes calculadas.
+Para a formulação bi-material desta pipeline:
 
-## Saídas
-No código Fortran atual (`PRINCIPAL.FOR`), o formato de saída é por blocos:
-- `SAIDA_URFx_W.out`
-- `SAIDA_UZFx_W.out`
-- `SAIDA_URMy_W.out`
-- `SAIDA_UZMy_W.out`
-- `SAIDA_UZZ_W.out` (novo canal vertical para carga vertical anular)
+- `N = 1` (duas linhas de propriedades: meio 1 e meio 2)
+- o campo `h` é mantido por compatibilidade numérica do solver (não entra na branch do modelo)
+- a frequência normalizada `a0` é amostrada e convertida para `omega` via
+  `omega = a0 * cS1 / a_ref`, `cS1 = sqrt(c44^(1)/rho^(1))`
 
-Cada arquivo contém blocos:
+## Canais e montagem da matriz U
+
+A montagem padrão é:
+
+- `Uxx <- URFx`
+- `Uzx <- UZFx`
+- `Uxz <- URMy`
+- `Uzz <- UZMy`
+
+com
+
+```text
+U = [[Uxx, Uxz],
+     [Uzx, Uzz]]
 ```
-OMEGA= ...
-Nrec= ...
-real imag
-real imag
-...
+
+## Geração de dataset
+
+Baseline principal:
+
+```bash
+python3 gen_data.py --problem multilayer_horizontal_rocking --config ./configs/problems/multilayer_horizontal_rocking/datagen.yaml
+python3 preprocess_data.py --problem multilayer_horizontal_rocking
 ```
 
-Também existem arquivos legados no repositório (`data/raw/.../v1/SAIDA_*_.out`) sem o bloco `Nrec`; o gerador Python atual suporta ambos os formatos.
+Baseline paper-oriented:
 
-## Geração de dataset para ML (implementado)
-Use o pipeline do projeto:
-1. `python3 gen_data.py --problem multilayer_horizontal_rocking`
-2. `python3 preprocess_data.py --problem multilayer_horizontal_rocking`
+```bash
+python3 gen_data.py --problem multilayer_horizontal_rocking --config ./configs/problems/multilayer_horizontal_rocking/datagen_paper_baseline.yaml
+python3 preprocess_data.py --problem multilayer_horizontal_rocking
+```
 
-Para usar um arquivo de configuração alternativo (por exemplo, baseline do paper):
-1. `python3 gen_data.py --problem multilayer_horizontal_rocking --config ./configs/problems/multilayer_horizontal_rocking/datagen_paper_baseline.yaml`
-2. `python3 preprocess_data.py --problem multilayer_horizontal_rocking`
+Baseline damping (Labaki et al., Sec. 4.4):
 
-O gerador Python:
-- amostra propriedades por camada + frequência;
-- cria `INPUT.TXT` por amostra;
-- executa o solver;
-- parseia cinco saídas complexas (`URFx`, `UZFx`, `URMy`, `UZMy`, `UZZ`);
-- salva `xb`, `xt`, `g_u` em `.npz`.
+```bash
+python3 gen_data.py --problem multilayer_horizontal_rocking --config ./configs/problems/multilayer_horizontal_rocking/datagen_paper_damping.yaml
+python3 preprocess_data.py --problem multilayer_horizontal_rocking
+```
 
-## Plotagem para comparação com o paper
-Após treinar/testar (`main.py --problem multilayer_horizontal_rocking --mode test`), a
-plotagem específica do problema gera:
+Nos modos `paper_case`, os casos seguem a Tabela 2 do artigo:
 
-- `plots/paper_alignment/paper_baseline_compatibility.yaml`
-- `plots/paper_alignment/paper_ratio_coverage.png`
-- `plots/paper_profiles/frequency_sweep_by_case.png`
-- `plots/paper_profiles/radial_profiles_omega_*.png`
-- `plots/prediction_heatmaps/sample_*_truth_pred_heatmaps.png`
+- `A`: meio1=A, meio2=A
+- `B`: meio1=A, meio2=B
+- `C`: meio1=A, meio2=C
+- `D`: meio1=A, meio2=D
+- `DB_DAMPING`: meio1=D, meio2=B
 
-Esses gráficos seguem o estilo de comparação por caso/camada/frequência do paper
-(A/B/C e varredura em frequência), usando as saídas disponíveis no solver atual
-(`URFx`, `UZFx`, `URMy`, `UZMy`, `UZZ`).
+## Artefatos salvos em `.npz`
 
-### Observação importante de modelagem
-O paper **Vertical Vibrations of an Elastic Foundation... (2014)** foca em resposta
-vertical da placa (`w`, `M_r`, `Q`). O código Fortran desta pasta agora inclui também
-o canal vertical do meio (`UZZ`), além dos canais de **horizontal + rocking** (`Fx` e `My`).
+- `xb`: `(num_samples, 15)`
+- `xt`: `((2M)^2, 2)` (índices normalizados receptor/fonte)
+- `g_u`: `(num_samples, (2M)^2)` complexo (matriz `U` achatada)
+- `g_u_blocks`: `(num_samples, M, M, 4)` complexo (`Uxx,Uxz,Uzx,Uzz`)
+- `a0`, `omega`, `properties`
 
-Ou seja, a comparação implementada aqui fica mais próxima do problema vertical no nível
-do operador do solo, mas ainda não reproduz literalmente as grandezas da placa
-(`w`, `M_r`, `Q`) sem adicionar o módulo variacional da placa do paper.
+## Plotagem e relatórios
 
-## Observações importantes
-- O binário `multilayer.exe` em `libs/` é macOS arm64.
-- O binário `HORROCK_190615.exe` é Windows.
-- Em Linux (cluster), compile os `.FOR` com `gfortran`.
-- Faça validação física antes de treinar (caso de referência homogêneo, comparação com literatura).
+No teste, a visualização do problema gera:
+
+- `plots/paper_alignment/formulation_alignment.yaml`
+- `plots/paper_alignment/block_mean_heatmaps.png`
+- `plots/paper_profiles/dynamic_compliance_proxies.png`
+- `plots/paper_profiles/paper_case_reference_compliances.png`
+- `plots/paper_profiles/paper_case_prediction_compliances.png`
+- `plots/prediction_heatmaps/sample_*_full_matrix_heatmaps.png`
+
+E o contrato de benchmark:
+
+- `metrics/baseline_performance_report.yaml`
+- `metrics/baseline_performance_table.csv`
+- `metrics/timing_comparison_report.yaml`
+- `plots/performance_tracking/*.png`

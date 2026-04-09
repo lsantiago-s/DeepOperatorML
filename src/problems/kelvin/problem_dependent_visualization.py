@@ -157,18 +157,29 @@ def _plot_error_vs_inputs(
     input_labels: list[str],
     output_path: Path,
 ) -> None:
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5), constrained_layout=True)
+    num_dims = int(min(2, xb_test.shape[1]))
+    if num_dims <= 0:
+        return
+
+    fig, axes = plt.subplots(1, num_dims, figsize=(6 * num_dims, 4.5), constrained_layout=True)
+    if num_dims == 1:
+        axes = np.array([axes])
+
     for ax_i, ax in enumerate(axes):
         x = xb_test[:, ax_i]
         order = np.argsort(x)
         for method_name, errs in method_errors.items():
             ax.plot(x[order], errs[order], lw=1.2, label=method_name)
-        ax.set_xlabel(str(input_labels[ax_i]))
+        label = input_labels[ax_i] if ax_i < len(input_labels) else f"branch_{ax_i}"
+        ax.set_xlabel(str(label))
         ax.set_ylabel("Relative L2 error")
         ax.grid(alpha=0.25)
-    axes[0].set_title("Error versus first branch parameter")
-    axes[1].set_title("Error versus second branch parameter")
-    axes[1].legend()
+    axes[0].set_title("Error versus branch parameter 1")
+    if num_dims > 1:
+        axes[1].set_title("Error versus branch parameter 2")
+        axes[1].legend()
+    else:
+        axes[0].legend()
     fig.savefig(output_path, dpi=180)
     plt.close(fig)
 

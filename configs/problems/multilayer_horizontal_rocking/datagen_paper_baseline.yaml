@@ -1,48 +1,53 @@
-data_filename: ./data/raw/multilayer_horizontal_rocking/multilayer_horizontal_rocking_paper_baseline_v1.npz
+data_filename: ./data/raw/multilayer_horizontal_rocking/multilayer_horizontal_rocking_paper_baseline_v2.npz
 executable_path: ./src/problems/multilayer_horizontal_rocking/libs/multilayer.exe
 
 seed: 42
 num_samples: 120
 
-# Paper baseline cases A/B/C (two layers + half-space)
-N: 2
+# Bi-material formulation: medium 1 + medium 2 half-space
+N: 1
 Nload: 1
 B: 0.0
 M: 20
 receiver_interface: 1
 
 codes: [1, 1, 1, 1]
-outputfilename: doesntmatter
+outputfilename: dontmatter
 
-omega:
-  # Paper uses normalized a0 in [0,4].
-  # The solver has 1/omega terms, so we avoid exact zero and use 0.001.
-  min: 0.001
+a_ref: 1.0
+a0:
+  min: 0.05
   max: 4.0
 
-sampling:
-  mode: paper_case
+block_channel_map:
+  uxx: urfx
+  uzx: uzfx
+  uxz: urmy
+  uzz: uzmy
 
-  # Kept for compatibility with random mode; ignored by paper_case.
+sampling:
+  # Labaki et al. (2013), Sec. 4.3:
+  # medium 1 fixed as case A, medium 2 in {A, B, C}.
+  mode: paper_case
+  medium1_h: 1.0
+  max_tries_per_medium: 1000
+
+  # Kept for compatibility with random mode; ignored when mode=paper_case.
   c11: [2.0, 6.0]
   c12: [0.5, 3.0]
   c13: [0.5, 3.0]
   c33: [2.0, 6.0]
   c44: [0.8, 2.5]
-  eta: [0.005, 0.10]
-  rho: [0.8, 2.5]
-  h: [0.2, 1.0]
-  semi_space_h: 0.0
+  eta: [0.005, 0.08]
+  rho: [0.8, 2.0]
 
   paper_cases: [A, B, C]
   paper_case_probabilities: [0.3333333333, 0.3333333333, 0.3333333334]
 
-  # Set to zero to match paper tabulated materials exactly.
+  # Zero jitter reproduces tabulated material values exactly.
   paper_c_jitter_rel: 0.0
   paper_eta_jitter_abs: 0.0
   paper_rho_jitter_abs: 0.0
-  paper_h_jitter_abs: 0.0
 
-  max_tries_per_layer: 1000
-
+max_attempts_per_sample: 20
 solver_timeout_seconds: 300

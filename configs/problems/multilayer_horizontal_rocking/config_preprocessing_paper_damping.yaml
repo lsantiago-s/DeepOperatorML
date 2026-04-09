@@ -1,5 +1,5 @@
 # ---------------------- Location of raw data ----------------
-raw_data_path: ./data/raw/multilayer_horizontal_rocking/multilayer_horizontal_rocking_paper_baseline_v2.npz
+raw_data_path: ./data/raw/multilayer_horizontal_rocking/multilayer_horizontal_rocking_paper_damping_v2.npz
 
 # ------------------------- Dataset parameters ----------------
 problem: multilayer_horizontal_rocking

@@ -7,7 +7,6 @@ from src.modules.models.config.fno_train_config import FNOTrainConfig
 from src.modules.pipe.logging import configure_logging
 from src.modules.models.config import DataConfig, DONTrainConfig, TestConfig
 from src.modules.models.config import validator as validation
-from src.modules.pipe.logging import configure_logging
 from src.modules.pipe.train import get_train_config_class
     
 def main() -> None:
@@ -15,27 +14,42 @@ def main() -> None:
     parser.add_argument("--problem", help="Type problem to be solved.")
     parser.add_argument("--train-config-path", default="./configs/training/config_don_train.yaml",
                         help="Path to training config file.")
+    parser.add_argument(
+        "--experiment-config-path",
+        default=None,
+        help="Optional explicit path to config_experiment.yaml",
+    )
+    parser.add_argument(
+        "--test-config-path",
+        default=None,
+        help="Optional explicit path to config_test.yaml",
+    )
     parser.add_argument("--test",   action="store_true",
                         help="Skip training and only test.")
     args = parser.parse_args()
 
     problem_path = os.path.join("./configs/problems/", args.problem)
     train_config_path = args.train_config_path
-    experiment_config_path = os.path.join(
+    experiment_config_path = args.experiment_config_path or os.path.join(
         problem_path, "config_experiment.yaml")
-    problem_test_config_path = os.path.join(problem_path, "config_test.yaml")
+    problem_test_config_path = args.test_config_path or os.path.join(problem_path, "config_test.yaml")
+
+    with open(experiment_config_path, "r", encoding="utf-8") as f:
+        experiment_cfg = yaml.safe_load(f)
 
     data_cfg = DataConfig.from_experiment_config(
         problem=args.problem,
-        exp_cfg=yaml.safe_load(open(experiment_config_path))
+        exp_cfg=experiment_cfg
     )
-    if get_train_config_class(yaml.safe_load(open(experiment_config_path))['model']) is DONTrainConfig:
+    model_cls = get_train_config_class(experiment_cfg['model'])
+
+    if model_cls is DONTrainConfig:
         train_cfg = DONTrainConfig.from_config_files(
             exp_cfg_path=experiment_config_path,
             train_cfg_path=train_config_path,
             data_cfg=data_cfg
         )
-    elif get_train_config_class(yaml.safe_load(open(experiment_config_path))['model']) is FNOTrainConfig:
+    elif model_cls is FNOTrainConfig:
         train_cfg = FNOTrainConfig.from_config_files(
             exp_cfg_path=experiment_config_path,
             train_cfg_path=train_config_path,
@@ -43,7 +57,7 @@ def main() -> None:
         )
         pass
     else:
-        raise NotImplementedError(f"Model {yaml.safe_load(open(experiment_config_path))['model']} not implemented yet.")
+        raise NotImplementedError(f"Model {experiment_cfg['model']} not implemented yet.")
 
     validation.validate_train_config(train_cfg)
     validation.validate_config_compatibility(data_cfg, train_cfg)
