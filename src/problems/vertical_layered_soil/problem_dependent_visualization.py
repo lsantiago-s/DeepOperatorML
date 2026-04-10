@@ -10,8 +10,8 @@ import numpy as np
 import yaml
 
 from src.modules.models.config import DataConfig, TestConfig
-from src.problems.multilayer_horizontal_rocking import plot_helper
-from src.problems.multilayer_horizontal_rocking import postprocessing as ppr
+from src.problems.vertical_layered_soil import plot_helper
+from src.problems.vertical_layered_soil import postprocessing as ppr
 
 logger = logging.getLogger(__name__)
 
@@ -212,7 +212,7 @@ def _save_common_contract_reports(
     n_channels = truth_test_matrix.shape[-1]
     channel_labels = [f"ch{i}" for i in range(n_channels)]
     report = {
-        "scope": "bi-material full influence matrix surrogate",
+        "scope": "vertical layered full influence matrix surrogate",
         "test_samples": int(truth_test_matrix.shape[0]),
         "frequency_axis_label": axis_label,
         "methods": {},
@@ -281,7 +281,7 @@ def _save_common_contract_reports(
         "reference_solver": {
             "total_s": solver_timing["solver_total_s"],
             "per_sample_s": solver_timing["solver_per_sample_s"],
-            "solver_kind": "legacy_fortran_multilayer_bimaterial",
+            "solver_kind": "legacy_fortran_vertical_layered_soil",
         },
         "inference": {
             "total_s": inference_total,
@@ -356,7 +356,7 @@ def plot_metrics(test_cfg: TestConfig, data_cfg: DataConfig) -> None:
 
     axis_all = np.asarray(raw_data["a0"] if "a0" in raw_data else raw_data["omega"], dtype=float)
 
-    logger.info("Generating multilayer paper-style plots at %s", plots_path)
+    logger.info("Generating vertical layered paper-style plots at %s", plots_path)
     plot_helper.run_all_multilayer_plots(
         plots_path=plots_path,
         properties_all=np.asarray(raw_data["properties"], dtype=float),
@@ -388,4 +388,4 @@ def plot_metrics(test_cfg: TestConfig, data_cfg: DataConfig) -> None:
         mean_test_matrix=mean_test_matrix,
         nn_test_matrix=nn_test_matrix,
     )
-    logger.info("Finished multilayer paper-style plotting.")
+    logger.info("Finished vertical layered paper-style plotting.")

@@ -1,11 +1,11 @@
-data_filename: ./data/raw/multilayer_horizontal_rocking/multilayer_horizontal_rocking_paper_baseline_v2.npz
+data_filename: ./data/raw/vertical_layered_soil/vertical_layered_soil_paper_baseline_v3.npz
 executable_path: auto
 
 seed: 42
 num_samples: 120
 
-# Bi-material formulation: medium 1 + medium 2 half-space
-N: 1
+# Vertical layered baseline from Labaki et al. (2014): N=2 + half-space
+N: 2
 Nload: 1
 B: 0.0
 M: 20
@@ -26,13 +26,10 @@ block_channel_map:
   uzz: uzmy
 
 sampling:
-  # Labaki et al. (2013), Sec. 4.3:
-  # medium 1 fixed as case A, medium 2 in {A, B, C}.
   mode: paper_case
-  medium1_h: 1.0
-  max_tries_per_medium: 1000
+  max_tries_per_layer: 1000
 
-  # Kept for compatibility with random mode; ignored when mode=paper_case.
+  # Fallback random ranges (unused in paper_case mode)
   c11: [2.0, 6.0]
   c12: [0.5, 3.0]
   c13: [0.5, 3.0]
@@ -40,14 +37,18 @@ sampling:
   c44: [0.8, 2.5]
   eta: [0.005, 0.08]
   rho: [0.8, 2.0]
+  h: [0.2, 1.0]
+  semi_space_h: 0.0
 
   paper_cases: [A, B, C]
   paper_case_probabilities: [0.3333333333, 0.3333333333, 0.3333333334]
 
-  # Zero jitter reproduces tabulated material values exactly.
+  # Zero jitter reproduces tabulated values and layer thicknesses.
   paper_c_jitter_rel: 0.0
   paper_eta_jitter_abs: 0.0
   paper_rho_jitter_abs: 0.0
+  paper_h_jitter_abs: 0.0
+  paper_shared_eta_jitter: false
 
 max_attempts_per_sample: 20
 solver_timeout_seconds: 300

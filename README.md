@@ -11,7 +11,7 @@ Runnable end-to-end pipelines are available for:
 - `kelvin`
 - `rajapakse_fixed_material`
 - `ground_vibration`
-- `multilayer_horizontal_rocking`
+- `vertical_layered_soil`
 
 `rajapakse_homogeneous` is currently out of benchmark scope.
 
@@ -85,6 +85,11 @@ python3 main.py --problem rajapakse_fixed_material --train-config-path ./configs
 python3 main.py --problem rajapakse_fixed_material --test
 ```
 
+Native library compatibility note (Linux clusters):
+
+- If you hit `GLIBC_2.34 not found` for `axsgrsce.so`, rebuild the library against glibc 2.28 (or older) before running datagen.
+- See [`src/problems/rajapakse_fixed_material/libs/README.md`](src/problems/rajapakse_fixed_material/libs/README.md) for cluster-native and containerized rebuild paths, plus symbol compatibility checks.
+
 ### ground_vibration
 
 Datagen uses externally provided matrices/parameters configured in `configs/problems/ground_vibration/datagen.yaml`.
@@ -114,34 +119,43 @@ python3 main.py --problem ground_vibration --train-config-path ./configs/trainin
 python3 main.py --problem ground_vibration --test
 ```
 
-### multilayer_horizontal_rocking
+### vertical_layered_soil
 
-This pipeline is aligned with the bi-material full-influence formulation:
+This pipeline is aligned with the vertical layered full-influence formulation (`N` finite layers over a half-space):
 
-- input branch: `s = [p^(1), p^(2), a0]` (15 dimensions)
+- input branch: `s = [p^(1), ..., p^(N+1), a0]`
+- input dimension: `8(N+1)` (includes finite-layer thicknesses and excludes half-space thickness)
 - output target: full complex matrix `U in C^(2M x 2M)` with blocks `Uxx, Uxz, Uzx, Uzz`
 
 Requires legacy executable path configured in datagen YAML.
 
-Paper baseline (Labaki et al. anisotropy cases, medium 1 fixed as case A, medium 2 in `{A,B,C}`):
+Paper baseline (`N=2`, Labaki et al. vertical layered cases A/B/C):
 
 ```bash
-python3 gen_data.py --problem multilayer_horizontal_rocking --config ./configs/problems/multilayer_horizontal_rocking/datagen_paper_baseline.yaml
-python3 preprocess_data.py --problem multilayer_horizontal_rocking --config ./configs/problems/multilayer_horizontal_rocking/config_preprocessing.yaml
-python3 main.py --problem multilayer_horizontal_rocking --train-config-path ./configs/training/config_don_train.yaml
-python3 main.py --problem multilayer_horizontal_rocking --test
+python3 gen_data.py --problem vertical_layered_soil --config ./configs/problems/vertical_layered_soil/datagen_paper_baseline.yaml
+python3 preprocess_data.py --problem vertical_layered_soil --config ./configs/problems/vertical_layered_soil/config_preprocessing.yaml
+python3 main.py --problem vertical_layered_soil --train-config-path ./configs/training/config_don_train.yaml
+python3 main.py --problem vertical_layered_soil --test
 ```
 
-Paper damping study dataset (Labaki et al. damping-style setup, `DB_DAMPING`):
+Paper damping study dataset (vertical layered damping variant):
 
 ```bash
-python3 gen_data.py --problem multilayer_horizontal_rocking --config ./configs/problems/multilayer_horizontal_rocking/datagen_paper_damping.yaml
-python3 preprocess_data.py --problem multilayer_horizontal_rocking --config ./configs/problems/multilayer_horizontal_rocking/config_preprocessing_paper_damping.yaml
-python3 main.py --problem multilayer_horizontal_rocking --train-config-path ./configs/training/config_don_train.yaml
-python3 main.py --problem multilayer_horizontal_rocking --test
+python3 gen_data.py --problem vertical_layered_soil --config ./configs/problems/vertical_layered_soil/datagen_paper_damping.yaml
+python3 preprocess_data.py --problem vertical_layered_soil --config ./configs/problems/vertical_layered_soil/config_preprocessing_paper_damping.yaml
+python3 main.py --problem vertical_layered_soil --train-config-path ./configs/training/config_don_train.yaml
+python3 main.py --problem vertical_layered_soil --test
 ```
 
-Key multilayer paper-style outputs produced during test:
+Run raw-data sanity plots (after `gen_data`):
+
+```bash
+python3 src/problems/vertical_layered_soil/sanity_plots.py \
+  --raw-data ./data/raw/vertical_layered_soil/vertical_layered_soil_paper_baseline_v3.npz \
+  --output-dir ./output/vertical_layered_soil/data_sanity
+```
+
+Key vertical layered paper-style outputs produced during test:
 
 - `plots/paper_alignment/formulation_alignment.yaml`
 - `plots/paper_alignment/block_mean_heatmaps.png`

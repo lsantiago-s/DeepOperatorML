@@ -18,8 +18,8 @@ from src.problems.base_generator import BaseProblemGenerator
 logger = logging.getLogger(__name__)
 
 
-class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
-    """Generate bi-material full influence matrices by calling the legacy Fortran solver."""
+class VerticalLayeredSoilGenerator(BaseProblemGenerator):
+    """Generate multilayer full influence matrices with the legacy Fortran solver."""
 
     CHANNEL_FILENAMES = {
         "urfx": ("SAIDA_URFx_W.out", "SAIDA_URFx_.out"),
@@ -29,23 +29,18 @@ class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
         "uzz": ("SAIDA_UZZ_W.out", "SAIDA_UZZ_.out"),
     }
 
-    # Labaki et al. (2013), Table 2, normalized with c44 = 1 and rho = 1.
+    # Vertical layered paper baseline material families (Labaki et al., 2014 style).
     PAPER_BASELINE_MATERIALS = {
-        "A": {"c11": 3.0000, "c12": 1.0000, "c13": 1.0000, "c33": 3.0000, "c44": 1.0000, "eta": 0.01, "rho": 1.0},
-        "B": {"c11": 2.7749, "c12": 0.7749, "c13": 0.7749, "c33": 5.5497, "c44": 1.0000, "eta": 0.01, "rho": 1.0},
-        "C": {"c11": 2.7321, "c12": 0.7321, "c13": 0.7321, "c33": 8.1962, "c44": 1.0000, "eta": 0.01, "rho": 1.0},
-        "D": {"c11": 2.7136, "c12": 0.7136, "c13": 0.7136, "c33": 10.8543, "c44": 1.0000, "eta": 0.01, "rho": 1.0},
+        "m1": {"c11": 3.0000, "c12": 1.0000, "c13": 1.0000, "c33": 3.0000, "c44": 1.0000, "eta": 0.01, "rho": 1.0},
+        "m2": {"c11": 2.8284, "c12": 0.8284, "c13": 0.8284, "c33": 4.2426, "c44": 1.0000, "eta": 0.01, "rho": 1.0},
+        "m3": {"c11": 2.7749, "c12": 0.7749, "c13": 0.7749, "c33": 5.5497, "c44": 1.0000, "eta": 0.01, "rho": 1.0},
     }
 
-    # Paper-aligned bi-material cases:
-    # - 4.3 anisotropy sweep: medium 1 fixed as A, medium 2 in {A,B,C}
-    # - 4.4 damping study: medium 1 = D, medium 2 = B
-    PAPER_BIMATERIAL_CASES = {
-        "A": ("A", "A"),
-        "B": ("A", "B"),
-        "C": ("A", "C"),
-        "D": ("A", "D"),
-        "DB_DAMPING": ("D", "B"),
+    # Cases for N=2 (2 finite layers + half-space).
+    PAPER_BASELINE_CASES = {
+        "A": [("m1", 0.5), ("m1", 0.5), ("m1", 0.0)],
+        "B": [("m3", 0.5), ("m2", 0.5), ("m1", 0.0)],
+        "C": [("m3", 0.3), ("m2", 0.7), ("m1", 0.0)],
     }
 
     def __init__(self, config: str | dict[str, Any]):
@@ -101,117 +96,17 @@ class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
             return False
         return (c11 + c12) * c33 > 2.0 * (c13**2)
 
-    def _get_medium_param_range(self, medium_cfg: dict[str, Any], fallback_cfg: dict[str, Any], key: str) -> tuple[float, float]:
-        values = medium_cfg.get(key, fallback_cfg.get(key, None))
-        if values is None:
-            raise KeyError(f"Missing sampling range for '{key}'.")
-        if not isinstance(values, (list, tuple)) or len(values) != 2:
-            raise ValueError(f"Expected two values for sampling '{key}', got {values}")
-        return float(values[0]), float(values[1])
+    @staticmethod
+    def _all_finite_complex(arr: np.ndarray) -> bool:
+        return np.all(np.isfinite(arr.real)) and np.all(np.isfinite(arr.imag))
 
-    def _sample_medium(self, rng: np.random.Generator, medium_cfg: dict[str, Any], fallback_cfg: dict[str, Any], max_tries: int) -> np.ndarray:
-        c11_min, c11_max = self._get_medium_param_range(medium_cfg, fallback_cfg, "c11")
-        c12_min, c12_max = self._get_medium_param_range(medium_cfg, fallback_cfg, "c12")
-        c13_min, c13_max = self._get_medium_param_range(medium_cfg, fallback_cfg, "c13")
-        c33_min, c33_max = self._get_medium_param_range(medium_cfg, fallback_cfg, "c33")
-        c44_min, c44_max = self._get_medium_param_range(medium_cfg, fallback_cfg, "c44")
-        eta_min, eta_max = self._get_medium_param_range(medium_cfg, fallback_cfg, "eta")
-        rho_min, rho_max = self._get_medium_param_range(medium_cfg, fallback_cfg, "rho")
-
-        for _ in range(max_tries):
-            c11 = rng.uniform(c11_min, c11_max)
-            c33 = rng.uniform(c33_min, c33_max)
-            c44 = rng.uniform(c44_min, c44_max)
-
-            c12_upper = min(c12_max, 0.95 * c11)
-            c12_lower = min(c12_min, c12_upper)
-            c12 = rng.uniform(c12_lower, c12_upper)
-
-            c13_limit = np.sqrt(max(((c11 + c12) * c33) / 2.0, 1e-12)) * 0.95
-            c13_upper = min(c13_max, c13_limit)
-            c13_lower = min(c13_min, c13_upper)
-            c13 = rng.uniform(c13_lower, c13_upper)
-
-            if not self._is_stable_transverse_isotropic(c11, c12, c13, c33, c44):
-                continue
-
-            eta = rng.uniform(eta_min, eta_max)
-            rho = rng.uniform(rho_min, rho_max)
-            if eta <= 0.0 or rho <= 0.0:
-                continue
-            return np.asarray([c11, c12, c13, c33, c44, eta, rho], dtype=float)
-
-        raise RuntimeError("Unable to sample stable TI medium; adjust sampling ranges or max_tries_per_medium.")
-
-    def _sample_bimaterial_random(self, rng: np.random.Generator) -> tuple[np.ndarray, str]:
-        sampling = self.config["sampling"]
-        max_tries = int(sampling.get("max_tries_per_medium", 1000))
-        medium1_cfg = dict(sampling.get("medium1", {}))
-        medium2_cfg = dict(sampling.get("medium2", {}))
-
-        p1 = self._sample_medium(rng=rng, medium_cfg=medium1_cfg, fallback_cfg=sampling, max_tries=max_tries)
-        p2 = self._sample_medium(rng=rng, medium_cfg=medium2_cfg, fallback_cfg=sampling, max_tries=max_tries)
-
-        h_top = float(sampling.get("medium1_h", 1.0))
-        props = np.zeros((2, 8), dtype=float)
-        props[0, :7] = p1
-        props[0, 7] = h_top
-        props[1, :7] = p2
-        props[1, 7] = 0.0
-        return props, "random"
-
-    def _sample_bimaterial_paper_case(self, rng: np.random.Generator) -> tuple[np.ndarray, str]:
-        sampling = self.config["sampling"]
-        requested_cases = [str(c).upper() for c in sampling.get("paper_cases", ["A", "B", "C"])]
-        for case in requested_cases:
-            if case not in self.PAPER_BIMATERIAL_CASES:
-                raise ValueError(f"Unknown paper case '{case}'. Valid: {sorted(self.PAPER_BIMATERIAL_CASES)}")
-
-        probabilities = np.asarray(sampling.get("paper_case_probabilities", None), dtype=float)
-        if probabilities.size == 0:
-            probabilities = np.ones(len(requested_cases), dtype=float) / len(requested_cases)
-        if probabilities.size != len(requested_cases):
-            raise ValueError("paper_case_probabilities must match paper_cases length.")
-        probabilities = probabilities / np.sum(probabilities)
-
-        case_label = str(rng.choice(requested_cases, p=probabilities))
-        m1_name, m2_name = self.PAPER_BIMATERIAL_CASES[case_label]
-        m1 = self.PAPER_BASELINE_MATERIALS[m1_name]
-        m2 = self.PAPER_BASELINE_MATERIALS[m2_name]
-
-        c_jitter_rel = float(sampling.get("paper_c_jitter_rel", 0.0))
-        eta_jitter_abs = float(sampling.get("paper_eta_jitter_abs", 0.0))
-        rho_jitter_abs = float(sampling.get("paper_rho_jitter_abs", 0.0))
-        shared_eta_jitter = bool(sampling.get("paper_shared_eta_jitter", False))
-        h_top = float(sampling.get("medium1_h", 1.0))
-
-        eta_shift = rng.uniform(-eta_jitter_abs, eta_jitter_abs) if shared_eta_jitter else None
-
-        def _jitter_material(mat: dict[str, float], eta_shift_val: float | None = None) -> np.ndarray:
-            c11 = float(mat["c11"]) * (1.0 + rng.uniform(-c_jitter_rel, c_jitter_rel))
-            c12 = float(mat["c12"]) * (1.0 + rng.uniform(-c_jitter_rel, c_jitter_rel))
-            c13 = float(mat["c13"]) * (1.0 + rng.uniform(-c_jitter_rel, c_jitter_rel))
-            c33 = float(mat["c33"]) * (1.0 + rng.uniform(-c_jitter_rel, c_jitter_rel))
-            c44 = float(mat["c44"]) * (1.0 + rng.uniform(-c_jitter_rel, c_jitter_rel))
-            eta = float(mat["eta"]) + (
-                float(eta_shift_val) if eta_shift_val is not None else rng.uniform(-eta_jitter_abs, eta_jitter_abs)
-            )
-            rho = float(mat["rho"]) + rng.uniform(-rho_jitter_abs, rho_jitter_abs)
-            if not self._is_stable_transverse_isotropic(c11, c12, c13, c33, c44):
-                raise RuntimeError("Unstable paper-case material after jitter.")
-            if eta <= 0.0 or rho <= 0.0:
-                raise RuntimeError("Invalid eta/rho after jitter.")
-            return np.asarray([c11, c12, c13, c33, c44, eta, rho], dtype=float)
-
-        p1 = _jitter_material(m1, eta_shift_val=eta_shift)
-        p2 = _jitter_material(m2, eta_shift_val=eta_shift)
-
-        props = np.zeros((2, 8), dtype=float)
-        props[0, :7] = p1
-        props[0, 7] = h_top
-        props[1, :7] = p2
-        props[1, 7] = 0.0
-        return props, case_label
+    @staticmethod
+    def _first_existing(candidates: tuple[str, ...], workdir: Path) -> Path:
+        for filename in candidates:
+            file_path = workdir / filename
+            if file_path.exists():
+                return file_path
+        raise FileNotFoundError(f"None of the expected output files were found in {workdir}: {candidates}")
 
     @staticmethod
     def _write_input_file(
@@ -289,14 +184,6 @@ class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
                 parsed[omega][nrec] = np.asarray(values, dtype=np.complex128).reshape(m_value, m_value)
         return parsed
 
-    @staticmethod
-    def _first_existing(candidates: tuple[str, ...], workdir: Path) -> Path:
-        for filename in candidates:
-            file_path = workdir / filename
-            if file_path.exists():
-                return file_path
-        raise FileNotFoundError(f"None of the expected output files were found in {workdir}: {candidates}")
-
     def _run_solver(self, omega: float, properties: np.ndarray) -> dict[str, np.ndarray]:
         solver_path = self._get_solver_path()
         n_layers = int(self.config["N"])
@@ -310,7 +197,7 @@ class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
             raise ValueError("This generator requires all CODE flags = 1 for full channel output parsing.")
         receiver_interface = int(self.config.get("receiver_interface", 1))
 
-        with tempfile.TemporaryDirectory(prefix="multilayer_sample_") as temp_dir:
+        with tempfile.TemporaryDirectory(prefix="vertical_layered_sample_") as temp_dir:
             workdir = Path(temp_dir)
             local_solver = workdir / solver_path.name
             shutil.copy2(solver_path, local_solver)
@@ -364,18 +251,6 @@ class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
 
         return channel_data
 
-    @staticmethod
-    def _all_finite_complex(arr: np.ndarray) -> bool:
-        return np.all(np.isfinite(arr.real)) and np.all(np.isfinite(arr.imag))
-
-    def _compute_omega_from_a0(self, a0: float, medium1: np.ndarray) -> float:
-        # medium1 = [c11, c12, c13, c33, c44, eta, rho]
-        c44 = float(medium1[4])
-        rho = float(medium1[6])
-        a_ref = float(self.config.get("a_ref", 1.0))
-        c_s1 = np.sqrt(c44 / max(rho, 1e-14))
-        return float(a0 * c_s1 / max(a_ref, 1e-14))
-
     def _assemble_full_matrix(self, channels: dict[str, np.ndarray]) -> tuple[np.ndarray, dict[str, np.ndarray]]:
         mapping = self.config.get(
             "block_channel_map",
@@ -406,8 +281,154 @@ class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
             return float(rng.uniform(float(omega_cfg["min"]), float(omega_cfg["max"])))
         return float(rng.uniform(float(a0_cfg["min"]), float(a0_cfg["max"])))
 
+    def _compute_omega_from_a0(self, a0: float, first_layer: np.ndarray) -> float:
+        c44 = float(first_layer[4])
+        rho = float(first_layer[6])
+        a_ref = float(self.config.get("a_ref", 1.0))
+        c_s1 = np.sqrt(c44 / max(rho, 1e-14))
+        return float(a0 * c_s1 / max(a_ref, 1e-14))
+
+    def _sample_layer(self, rng: np.random.Generator, sampling: dict[str, Any]) -> np.ndarray:
+        c11_min, c11_max = map(float, sampling["c11"])
+        c12_min, c12_max = map(float, sampling["c12"])
+        c13_min, c13_max = map(float, sampling["c13"])
+        c33_min, c33_max = map(float, sampling["c33"])
+        c44_min, c44_max = map(float, sampling["c44"])
+        eta_min, eta_max = map(float, sampling["eta"])
+        rho_min, rho_max = map(float, sampling["rho"])
+
+        max_tries = int(sampling.get("max_tries_per_layer", 1000))
+        for _ in range(max_tries):
+            c11 = rng.uniform(c11_min, c11_max)
+            c33 = rng.uniform(c33_min, c33_max)
+            c44 = rng.uniform(c44_min, c44_max)
+
+            c12_upper = min(c12_max, 0.95 * c11)
+            c12_lower = min(c12_min, c12_upper)
+            c12 = rng.uniform(c12_lower, c12_upper)
+
+            c13_limit = np.sqrt(max(((c11 + c12) * c33) / 2.0, 1e-12)) * 0.95
+            c13_upper = min(c13_max, c13_limit)
+            c13_lower = min(c13_min, c13_upper)
+            c13 = rng.uniform(c13_lower, c13_upper)
+
+            eta = rng.uniform(eta_min, eta_max)
+            rho = rng.uniform(rho_min, rho_max)
+            if not self._is_stable_transverse_isotropic(c11, c12, c13, c33, c44):
+                continue
+            if eta <= 0.0 or rho <= 0.0:
+                continue
+            return np.asarray([c11, c12, c13, c33, c44, eta, rho], dtype=float)
+
+        raise RuntimeError("Unable to sample stable layer constants; adjust sampling ranges.")
+
+    def _sample_properties_random(self, rng: np.random.Generator) -> tuple[np.ndarray, str]:
+        n_layers = int(self.config["N"])
+        sampling = self.config["sampling"]
+        h_min, h_max = map(float, sampling["h"])
+        semi_space_h = float(sampling.get("semi_space_h", 0.0))
+
+        props = np.zeros((n_layers + 1, 8), dtype=float)
+        for layer_idx in range(n_layers + 1):
+            mat = self._sample_layer(rng=rng, sampling=sampling)
+            props[layer_idx, :7] = mat
+            if layer_idx == n_layers:
+                props[layer_idx, 7] = semi_space_h
+            else:
+                props[layer_idx, 7] = rng.uniform(h_min, h_max)
+        return props, "random"
+
+    def _sample_properties_paper_case(self, rng: np.random.Generator) -> tuple[np.ndarray, str]:
+        n_layers = int(self.config["N"])
+        n_rows = n_layers + 1
+        sampling = self.config["sampling"]
+
+        requested_cases = [str(c).upper() for c in sampling.get("paper_cases", ["A", "B", "C"])]
+        for case in requested_cases:
+            if case not in self.PAPER_BASELINE_CASES:
+                raise ValueError(f"Unknown paper case '{case}'. Valid values: {sorted(self.PAPER_BASELINE_CASES)}")
+
+        probabilities = np.asarray(sampling.get("paper_case_probabilities", None), dtype=float)
+        if probabilities.size == 0:
+            probabilities = np.ones(len(requested_cases), dtype=float) / len(requested_cases)
+        if probabilities.size != len(requested_cases):
+            raise ValueError("paper_case_probabilities must match paper_cases length.")
+        probabilities = probabilities / np.sum(probabilities)
+
+        case_label = str(rng.choice(requested_cases, p=probabilities))
+        case_rows = self.PAPER_BASELINE_CASES[case_label]
+        if len(case_rows) != n_rows:
+            raise ValueError(
+                f"paper_case requires N={len(case_rows)-1} for case '{case_label}', got N={n_layers}."
+            )
+
+        c_jitter_rel = float(sampling.get("paper_c_jitter_rel", 0.0))
+        eta_jitter_abs = float(sampling.get("paper_eta_jitter_abs", 0.0))
+        rho_jitter_abs = float(sampling.get("paper_rho_jitter_abs", 0.0))
+        h_jitter_abs = float(sampling.get("paper_h_jitter_abs", 0.0))
+        shared_eta = bool(sampling.get("paper_shared_eta_jitter", False))
+
+        eta_shift = rng.uniform(-eta_jitter_abs, eta_jitter_abs) if shared_eta else None
+
+        props = np.zeros((n_rows, 8), dtype=float)
+        for row_idx, (mat_name, base_h) in enumerate(case_rows):
+            mat = self.PAPER_BASELINE_MATERIALS[mat_name]
+
+            c11 = float(mat["c11"]) * (1.0 + rng.uniform(-c_jitter_rel, c_jitter_rel))
+            c12 = float(mat["c12"]) * (1.0 + rng.uniform(-c_jitter_rel, c_jitter_rel))
+            c13 = float(mat["c13"]) * (1.0 + rng.uniform(-c_jitter_rel, c_jitter_rel))
+            c33 = float(mat["c33"]) * (1.0 + rng.uniform(-c_jitter_rel, c_jitter_rel))
+            c44 = float(mat["c44"]) * (1.0 + rng.uniform(-c_jitter_rel, c_jitter_rel))
+            eta = float(mat["eta"]) + (
+                float(eta_shift) if eta_shift is not None else rng.uniform(-eta_jitter_abs, eta_jitter_abs)
+            )
+            rho = float(mat["rho"]) + rng.uniform(-rho_jitter_abs, rho_jitter_abs)
+            if row_idx == n_rows - 1:
+                h = 0.0
+            else:
+                h = float(base_h) + rng.uniform(-h_jitter_abs, h_jitter_abs)
+
+            if not self._is_stable_transverse_isotropic(c11, c12, c13, c33, c44):
+                raise RuntimeError("Unstable paper-case material after jitter.")
+            if eta <= 0.0 or rho <= 0.0 or h < 0.0:
+                raise RuntimeError("Invalid eta/rho/h after paper-case jitter.")
+
+            props[row_idx] = np.asarray([c11, c12, c13, c33, c44, eta, rho, h], dtype=float)
+
+        return props, case_label
+
+    @staticmethod
+    def _build_branch_input(properties: np.ndarray, a0: float) -> np.ndarray:
+        # Input contract for vertical layered soil:
+        # [all layer materials (7*(N+1)), finite-layer thicknesses (N), a0] => 8*(N+1)
+        n_rows = int(properties.shape[0])
+        n_layers = n_rows - 1
+        material_flat = properties[:, :7].reshape(-1)
+        finite_h = properties[:n_layers, 7]
+        return np.concatenate([material_flat, finite_h, np.asarray([a0], dtype=float)])
+
+    @staticmethod
+    def _build_input_layout(n_layers: int) -> list[str]:
+        labels: list[str] = []
+        for idx in range(1, n_layers + 2):
+            labels.extend(
+                [
+                    f"c11_{idx}",
+                    f"c12_{idx}",
+                    f"c13_{idx}",
+                    f"c33_{idx}",
+                    f"c44_{idx}",
+                    f"eta_{idx}",
+                    f"rho_{idx}",
+                ]
+            )
+        labels.extend([f"h_{idx}" for idx in range(1, n_layers + 1)])
+        labels.append("a0")
+        return labels
+
     def generate(self) -> None:
         start = time.perf_counter()
+
         seed = int(self.config.get("seed", 42))
         num_samples = int(self.config["num_samples"])
         max_attempts_per_sample = int(self.config.get("max_attempts_per_sample", 20))
@@ -415,10 +436,8 @@ class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
         m_value = int(self.config["M"])
         b_value = float(self.config.get("B", 0.0))
 
-        if n_layers != 1:
-            raise ValueError(
-                "This formulation requires N=1 (bi-material: medium 1 + medium 2 half-space)."
-            )
+        if n_layers < 1:
+            raise ValueError("N must be >= 1 for layered soil formulation.")
         if not (0.0 <= b_value < 1.0):
             raise ValueError(f"B must satisfy 0 <= B < 1. Got: {b_value}")
 
@@ -434,7 +453,6 @@ class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
         rejected_total = 0
         retries_per_sample: list[int] = []
 
-        # Full influence matrix coordinates over (receiver dof, source dof) in normalized index space.
         n_dof = 2 * m_value
         dof_axis = np.arange(n_dof, dtype=float)
         if n_dof > 1:
@@ -447,23 +465,22 @@ class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
             raise ValueError(f"Unknown sampling.mode '{sampling_mode}'. Valid: random, paper_case")
 
         logger.info(
-            "Generating bi-material full-matrix dataset with %d samples (mode=%s, input_dim=15)...",
+            "Generating vertical layered full-matrix dataset with %d samples (mode=%s, N=%d)...",
             num_samples,
             sampling_mode,
+            n_layers,
         )
 
         for idx in range(1, num_samples + 1):
             sample_retries = 0
             while True:
                 if sampling_mode == "paper_case":
-                    props, case_label = self._sample_bimaterial_paper_case(rng)
+                    props, case_label = self._sample_properties_paper_case(rng)
                 else:
-                    props, case_label = self._sample_bimaterial_random(rng)
+                    props, case_label = self._sample_properties_random(rng)
 
-                medium1 = props[0, :7]
-                medium2 = props[1, :7]
                 a0_val = self._sample_a0(rng)
-                omega_val = self._compute_omega_from_a0(a0=a0_val, medium1=medium1)
+                omega_val = self._compute_omega_from_a0(a0=a0_val, first_layer=props[0, :7])
                 attempt_idx = sample_retries + 1
 
                 logger.info(
@@ -511,7 +528,7 @@ class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
                     max_attempts_per_sample,
                 )
 
-            xb = np.concatenate([medium1, medium2, np.array([a0_val], dtype=float)])
+            xb = self._build_branch_input(properties=props, a0=a0_val)
 
             xb_rows.append(xb)
             properties_samples.append(props)
@@ -550,15 +567,16 @@ class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
         )
 
         duration = time.perf_counter() - start
+        input_layout = self._build_input_layout(n_layers=n_layers)
         metadata = {
-            "generator": "MultilayerHorizontalRockingGenerator",
-            "formulation": "bimaterial_full_matrix",
+            "generator": "VerticalLayeredSoilGenerator",
+            "formulation": "vertical_layered_full_matrix",
             "runtime_s": float(duration),
             "runtime_ms": float(duration * 1e3),
             "timing_breakdown": {
                 "direct_solver_total_s": float(duration),
                 "direct_solver_per_sample_s": float(duration / max(num_samples, 1)),
-                "solver_kind": "legacy_fortran_multilayer_bimaterial",
+                "solver_kind": "legacy_fortran_vertical_layered_soil",
             },
             "num_samples": num_samples,
             "seed": seed,
@@ -566,24 +584,8 @@ class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
             "N_layers": n_layers,
             "M": m_value,
             "B": b_value,
-            "input_dim": 15,
-            "input_layout": [
-                "c11_1",
-                "c12_1",
-                "c13_1",
-                "c33_1",
-                "c44_1",
-                "eta_1",
-                "rho_1",
-                "c11_2",
-                "c12_2",
-                "c13_2",
-                "c33_2",
-                "c44_2",
-                "eta_2",
-                "rho_2",
-                "a0",
-            ],
+            "input_dim": int(8 * (n_layers + 1)),
+            "input_layout": input_layout,
             "output_layout": {
                 "matrix_shape": [2 * m_value, 2 * m_value],
                 "blocks": ["Uxx", "Uxz", "Uzx", "Uzz"],
@@ -608,11 +610,11 @@ class MultilayerHorizontalRockingGenerator(BaseProblemGenerator):
                 str(label): int(np.sum(np.asarray(sampled_case_labels) == label))
                 for label in sorted(set(sampled_case_labels))
             },
-            "paper_case_definitions": self.PAPER_BIMATERIAL_CASES,
+            "paper_case_definitions": self.PAPER_BASELINE_CASES,
             "paper_material_table": self.PAPER_BASELINE_MATERIALS,
             "paper_reference": {
-                "labaki_2013_reported_time_s_for_Uzz_M20": 310.0,
-                "note": "Reported reference is for filling Uzz only; this dataset learns full coupled U matrix.",
+                "labaki_2014_vertical_layered": True,
+                "note": "Legacy exact-stiffness layered solver; full coupled U matrix target.",
             },
         }
 

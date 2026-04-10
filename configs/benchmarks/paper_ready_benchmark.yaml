@@ -1,7 +1,7 @@
 name: paper_ready_benchmark
 description: >
   Reproducible benchmark manifest for paper-ready DeepONet experiments across
-  kelvin, rajapakse_fixed_material, ground_vibration and multilayer_horizontal_rocking.
+  kelvin, rajapakse_fixed_material, ground_vibration and vertical_layered_soil.
 
 train_configs:
   don: ./configs/training/config_don_train.yaml
@@ -82,12 +82,12 @@ problems:
       don: 2025-11-10_14-23-36
       fno: null
 
-  multilayer_horizontal_rocking:
+  vertical_layered_soil:
     enabled: true
-    datagen_config: ./configs/problems/multilayer_horizontal_rocking/datagen_paper_baseline.yaml
-    preprocessing_config: ./configs/problems/multilayer_horizontal_rocking/config_preprocessing.yaml
-    experiment_config: ./configs/problems/multilayer_horizontal_rocking/config_experiment.yaml
-    test_config: ./configs/problems/multilayer_horizontal_rocking/config_test.yaml
+    datagen_config: ./configs/problems/vertical_layered_soil/datagen_paper_baseline.yaml
+    preprocessing_config: ./configs/problems/vertical_layered_soil/config_preprocessing.yaml
+    experiment_config: ./configs/problems/vertical_layered_soil/config_experiment.yaml
+    test_config: ./configs/problems/vertical_layered_soil/config_test.yaml
     canonical_dataset_version: ""
     canonical_experiments:
       don: null

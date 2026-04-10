@@ -1,0 +1,56 @@
+data_filename: ./data/raw/vertical_layered_soil/vertical_layered_soil_v3_layered.npz
+executable_path: ./src/problems/vertical_layered_soil/libs/multilayer.exe
+
+seed: 42
+num_samples: 120
+
+# Layered formulation: N finite layers over a half-space (N+1 material rows in INPUT)
+N: 2
+Nload: 1
+B: 0.0
+M: 20
+receiver_interface: 1
+
+codes: [1, 1, 1, 1]
+outputfilename: dontmatter
+
+# Non-dimensional frequency and conversion omega = a0 * cS1 / a_ref
+a_ref: 1.0
+a0:
+  min: 0.05
+  max: 4.0
+
+# Mapping from solver channels to coupled blocks in U = [[Uxx,Uxz],[Uzx,Uzz]]
+block_channel_map:
+  uxx: urfx
+  uzx: uzfx
+  uxz: urmy
+  uzz: uzmy
+
+sampling:
+  mode: random
+  max_tries_per_layer: 1000
+
+  c11: [2.0, 6.0]
+  c12: [0.5, 3.0]
+  c13: [0.5, 3.0]
+  c33: [2.0, 6.0]
+  c44: [0.8, 2.5]
+  eta: [0.005, 0.08]
+  rho: [0.8, 2.0]
+
+  # Thickness range for finite layers (half-space thickness is fixed at semi_space_h)
+  h: [0.2, 1.0]
+  semi_space_h: 0.0
+
+  # Optional paper-case parameters (used only when mode=paper_case)
+  paper_cases: [A, B, C]
+  paper_case_probabilities: [0.3333333333, 0.3333333333, 0.3333333334]
+  paper_c_jitter_rel: 0.0
+  paper_eta_jitter_abs: 0.0
+  paper_rho_jitter_abs: 0.0
+  paper_h_jitter_abs: 0.0
+  paper_shared_eta_jitter: false
+
+max_attempts_per_sample: 20
+solver_timeout_seconds: 300

@@ -1,10 +1,10 @@
-data_filename: ./data/raw/multilayer_horizontal_rocking/multilayer_horizontal_rocking_paper_damping_v2.npz
+data_filename: ./data/raw/vertical_layered_soil/vertical_layered_soil_paper_damping_v3.npz
 executable_path: auto
 
 seed: 42
 num_samples: 120
 
-N: 1
+N: 2
 Nload: 1
 B: 0.0
 M: 20
@@ -25,19 +25,19 @@ block_channel_map:
   uzz: uzmy
 
 sampling:
-  # Labaki et al. (2013), Section 4.4: medium 1 = case D, medium 2 = case B.
+  # Damping-focused variant on vertical layered baseline.
   mode: paper_case
-  medium1_h: 1.0
-  max_tries_per_medium: 1000
+  max_tries_per_layer: 1000
 
-  paper_cases: [DB_DAMPING]
+  paper_cases: [C]
   paper_case_probabilities: [1.0]
 
-  # Keep c_ij fixed and vary damping.
+  # Keep c_ij and h fixed; vary damping coherently across layers.
   paper_c_jitter_rel: 0.0
   paper_eta_jitter_abs: 0.095
   paper_shared_eta_jitter: true
   paper_rho_jitter_abs: 0.0
+  paper_h_jitter_abs: 0.0
 
 max_attempts_per_sample: 20
 solver_timeout_seconds: 300

@@ -9,6 +9,8 @@ plot_coefficients: false
 plot_coefficients_mean: false
 percentiles: 3
 vectors_to_highlight: 3
+
+# Vertical layered full-matrix plotting options
 plot_paper_alignment: true
 plot_paper_profiles: true
 plot_prediction_heatmaps: true

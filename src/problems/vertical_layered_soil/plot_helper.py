@@ -305,12 +305,45 @@ def _save_formulation_report(
         for name in ["Uxx", "Uxz", "Uzx", "Uzz"]
     }
 
+    n_rows = int(properties_all.shape[1])
+    n_layers = n_rows - 1
+
+    input_layout: list[str] = []
+    for idx in range(1, n_rows + 1):
+        input_layout.extend(
+            [
+                f"c11_{idx}",
+                f"c12_{idx}",
+                f"c13_{idx}",
+                f"c33_{idx}",
+                f"c44_{idx}",
+                f"eta_{idx}",
+                f"rho_{idx}",
+            ]
+        )
+    input_layout.extend([f"h_{idx}" for idx in range(1, n_layers + 1)])
+    input_layout.append("a0")
+
+    eta_ranges = [
+        [float(np.min(properties_all[:, row_idx, 5])), float(np.max(properties_all[:, row_idx, 5]))]
+        for row_idx in range(n_rows)
+    ]
+    h_ranges_finite = (
+        [
+            [float(np.min(properties_all[:, row_idx, 7])), float(np.max(properties_all[:, row_idx, 7]))]
+            for row_idx in range(n_layers)
+        ]
+        if n_layers > 0
+        else []
+    )
+
     dataset_summary = {
         "num_samples": int(properties_all.shape[0]),
+        "N_layers": int(n_layers),
         f"{axis_label}_min": float(np.min(axis_values)),
         f"{axis_label}_max": float(np.max(axis_values)),
-        "eta_range_medium1": [float(np.min(properties_all[:, 0, 5])), float(np.max(properties_all[:, 0, 5]))],
-        "eta_range_medium2": [float(np.min(properties_all[:, 1, 5])), float(np.max(properties_all[:, 1, 5]))],
+        "eta_ranges_per_row": eta_ranges,
+        "h_ranges_finite_layers": h_ranges_finite,
     }
     if case_labels_all is not None:
         labels = np.asarray(case_labels_all).astype(str)
@@ -322,24 +355,8 @@ def _save_formulation_report(
     report = {
         "formulation": "Full Influence Matrix Learning --- Non-Homogeneous Soil",
         "input_definition": {
-            "dim": 15,
-            "layout": [
-                "c11_1",
-                "c12_1",
-                "c13_1",
-                "c33_1",
-                "c44_1",
-                "eta_1",
-                "rho_1",
-                "c11_2",
-                "c12_2",
-                "c13_2",
-                "c33_2",
-                "c44_2",
-                "eta_2",
-                "rho_2",
-                "a0",
-            ],
+            "dim": int(len(input_layout)),
+            "layout": input_layout,
         },
         "output_definition": {
             "matrix_shape": [int(truth_blocks["Uxx"].shape[1] * 2), int(truth_blocks["Uxx"].shape[2] * 2)],
@@ -349,8 +366,8 @@ def _save_formulation_report(
         "dataset_summary": dataset_summary,
         "block_mean_relative_errors": block_errors,
         "paper_reference": {
-            "labaki_2013_reported_time_s_for_Uzz_M20": 310.0,
-            "note": "Reference time is Uzz-only matrix fill; current target is full coupled U matrix.",
+            "labaki_2014_vertical_layered": True,
+            "note": "Legacy exact-stiffness layered solver; current target is full coupled U matrix.",
         },
     }
 
@@ -434,4 +451,4 @@ def run_all_multilayer_plots(
         axis_label=axis_label,
     )
 
-    logger.info("Saved formulation-aligned multilayer plots under %s", plots_path)
+    logger.info("Saved formulation-aligned vertical layered plots under %s", plots_path)

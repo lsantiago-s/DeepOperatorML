@@ -1,5 +1,0 @@
-dataset_version: 212e9c94
-model: don
-precision: float32
-device: cuda
-output_path: ./output
