@@ -5,6 +5,8 @@ import logging
 import numpy as np
 from typing import Any
 from pathlib import Path
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from src.problems.ground_vibration import postprocessing as ppr
 from src.problems.ground_vibration import plot_helper as helper
@@ -138,6 +140,14 @@ def _get_solver_timing(data_cfg: DataConfig) -> dict[str, float | None]:
     with open(meta_path, "r", encoding="utf-8") as f:
         meta = yaml.safe_load(f) or {}
 
+    external_total = _safe_float(meta.get("reference_solver_total_s"))
+    external_per_sample = _safe_float(meta.get("reference_solver_per_sample_s"))
+    if external_total is not None or external_per_sample is not None:
+        if external_total is not None and external_per_sample is None:
+            n_total = int(data_cfg.data[data_cfg.features[0]].shape[0])
+            external_per_sample = external_total / max(n_total, 1)
+        return {"solver_total_s": external_total, "solver_per_sample_s": external_per_sample}
+
     total = _safe_float(meta.get("runtime_s"))
     if total is None:
         runtime_ms = _safe_float(meta.get("runtime_ms"))
@@ -265,7 +275,7 @@ def _save_common_contract_reports(
         "reference_solver": {
             "total_s": solver_timing["solver_total_s"],
             "per_sample_s": solver_timing["solver_per_sample_s"],
-            "solver_kind": "ground_vibration_precomputed_matrices",
+            "solver_kind": "ground_vibration_semi_infinite_integral_quadrature",
         },
         "inference": {
             "total_s": inference_total,
@@ -429,18 +439,23 @@ def _build_operator_report(
     report = {
         "scope": "soil influence operator surrogate (not coupled wall-soil IBEM-FEM)",
         "test_samples": int(U_true.shape[0]),
-        "operator_relative_error": {
+        "matrix_level_error_frobenius": {
             "mean": float(np.mean(sample_rel_errors)),
             "median": float(np.median(sample_rel_errors)),
             "p90": float(np.percentile(sample_rel_errors, 90)),
             "max": float(np.max(sample_rel_errors)),
         },
+        "epsilon_F_per_sample": sample_rel_errors.tolist(),
         "channel_relative_error": channel_errors,
         "reciprocity_relative_error": {
             "true_mean": float(np.mean(reciprocity_true)),
             "pred_mean": float(np.mean(reciprocity_pred)),
             "true_p90": float(np.percentile(reciprocity_true, 90)),
             "pred_p90": float(np.percentile(reciprocity_pred, 90)),
+        },
+        "validation_strategy": {
+            "level_1": "matrix-level Frobenius relative error epsilon_F",
+            "level_2": "response-level error under representative surface traction vectors",
         },
         "response_under_surface_tractions": response_metrics,
     }

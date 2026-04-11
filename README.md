@@ -94,7 +94,7 @@ Native library compatibility note (Linux clusters):
 
 Datagen uses externally provided matrices/parameters configured in `configs/problems/ground_vibration/datagen.yaml`.
 The learned operator is the full surface influence matrix map
-`(c11, c13, c33, c44, rho, eta, a0) -> U`, where
+`(c11, c13, c33, c44, rho, eta, a0; x_m, s1^n, s2^n) -> u_ij^(mn)`, where
 `a0 = omega b / cS` and `cS = sqrt(c44 / rho)`.
 
 If the external `params_array.csv` still stores `omega` instead of `a0`,
@@ -109,7 +109,10 @@ without MATLAB, use:
   --n-samples 100 \
   --n-points 100 \
   --half-span 2.0 \
-  --damping 0.01
+  --a0-min 0.05 \
+  --a0-max 4.0 \
+  --eta-min 0.005 \
+  --eta-max 0.05
 ```
 
 ```bash

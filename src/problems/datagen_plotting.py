@@ -98,7 +98,11 @@ def _plot_ground_vibration_dataset(data: dict[str, np.ndarray], output_dir: Path
         raise ValueError(f"Unexpected ground_vibration g_u shape: {g_u.shape}")
 
     n_nodes = int(x_coords.shape[0])
-    param_keys = [key for key in ("c11", "c13", "c33", "c44", "ρ", "η", "a0") if key in data]
+    param_keys = [
+        key
+        for key in ("c11", "c13", "c33", "c44", "rho", "eta", "a0", "ρ", "η")
+        if key in data
+    ]
     if not param_keys:
         param_keys = ["sample_index"]
 
@@ -106,7 +110,10 @@ def _plot_ground_vibration_dataset(data: dict[str, np.ndarray], output_dir: Path
         params = np.arange(g_u.shape[0], dtype=float)[:, None]
     else:
         params = np.column_stack([np.asarray(data[key]) for key in param_keys])
-    param_labels = ["rho" if key == "ρ" else "eta" if key == "η" else key for key in param_keys]
+    param_labels = [
+        "rho" if key == "ρ" else "eta" if key == "η" else key
+        for key in param_keys
+    ]
     ranking_values = np.asarray(data["a0"], dtype=float) if "a0" in data else params[:, -1]
 
     outputs: list[Path] = []

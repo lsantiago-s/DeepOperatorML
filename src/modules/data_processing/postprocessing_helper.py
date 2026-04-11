@@ -1,6 +1,8 @@
 from __future__ import annotations
 from pathlib import Path
 import importlib.util
+import sys
+import types
 from src.modules.models.config import DataConfig, TestConfig
 
 def run_plotting(test_cfg: TestConfig, data_cfg: DataConfig) -> None:
@@ -11,6 +13,13 @@ def run_plotting(test_cfg: TestConfig, data_cfg: DataConfig) -> None:
         raise FileNotFoundError(f"Directory not found: {base_dir}")
     if not script_path.exists():
         raise FileNotFoundError(f"Plotting script not found: {script_path}")
+
+    # Avoid importing src/problems/__init__.py side effects when loading
+    # problem-specific plotting scripts via file path.
+    if "src.problems" not in sys.modules:
+        problems_pkg = types.ModuleType("src.problems")
+        problems_pkg.__path__ = [str(base_dir / "problems")]
+        sys.modules["src.problems"] = problems_pkg
 
     module_name = f"problem_dependent_visualization"
     spec = importlib.util.spec_from_file_location(

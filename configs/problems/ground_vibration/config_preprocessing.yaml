@@ -1,5 +1,5 @@
 #  ----------------------Location of .npz data files ----------------
-raw_data_path: ./data/raw/ground_vibration/ground_vibration_v2.npz
+raw_data_path: ./data/raw/ground_vibration/ground_vibration_v3_homogeneous_operator.npz
 
 # ------------------------- Dataset parameters ----------------
 problem: ground_vibration
@@ -16,8 +16,8 @@ input_function_keys:
   - c13
   - c33
   - c44
-  - ρ
-  - η
+  - rho
+  - eta
   - a0
 
 input_function_labels:
@@ -31,6 +31,8 @@ input_function_labels:
 
 coordinate_keys:
   - x
+  - s1
+  - s2
 
 output_keys:
   - re_u_xx

@@ -32,26 +32,44 @@ def sample_parameters(
     c33_ratio_range: tuple[float, float],
     c13_ratio_range: tuple[float, float],
     rho_range: tuple[float, float],
-    freq_range: tuple[float, float],
+    eta_range: tuple[float, float],
+    a0_range: tuple[float, float],
+    source_half_width: float,
+    freq_range_hz: tuple[float, float] | None,
 ) -> np.ndarray:
+    """Sample homogeneous TI parameters and convert to (a0, omega).
+
+    Output layout:
+    [c11, c13, c33, c44, rho, eta, a0, omega]
+    """
     rng = np.random.default_rng(rng_seed)
-    lhs = lhs_sample(n_samples, 6, rng)
-    params = np.zeros((n_samples, 6), dtype=float)
+    lhs = lhs_sample(n_samples, 7, rng)
+    params = np.zeros((n_samples, 8), dtype=float)
 
     for i in range(n_samples):
         c44 = c44_range[0] + lhs[i, 0] * (c44_range[1] - c44_range[0])
         c11 = c44 * (c11_ratio_range[0] + lhs[i, 1] * (c11_ratio_range[1] - c11_ratio_range[0]))
         c33 = c44 * (c33_ratio_range[0] + lhs[i, 2] * (c33_ratio_range[1] - c33_ratio_range[0]))
 
-        max_c13_ratio = (math.sqrt(max(c11 * c33, 1e-14)) - c44) / c44
+        max_c13_ratio = (math.sqrt(max(c11 * c33, 1e-14)) - c44) / max(c44, 1e-14)
         sampled_c13_ratio = c13_ratio_range[0] + lhs[i, 3] * (c13_ratio_range[1] - c13_ratio_range[0])
         c13_ratio = min(sampled_c13_ratio, max_c13_ratio * 0.95)
+        c13_ratio = max(c13_ratio, 0.0)
         c13 = c44 * c13_ratio
 
         rho = rho_range[0] + lhs[i, 4] * (rho_range[1] - rho_range[0])
-        freq = freq_range[0] + lhs[i, 5] * (freq_range[1] - freq_range[0])
-        omega = 2.0 * math.pi * freq
-        params[i, :] = [c11, c13, c33, c44, rho, omega]
+        eta = eta_range[0] + lhs[i, 5] * (eta_range[1] - eta_range[0])
+        c_s = math.sqrt(max(c44 / max(rho, 1e-14), 1e-14))
+
+        if freq_range_hz is None:
+            a0 = a0_range[0] + lhs[i, 6] * (a0_range[1] - a0_range[0])
+            omega = a0 * c_s / max(source_half_width, 1e-14)
+        else:
+            freq_hz = freq_range_hz[0] + lhs[i, 6] * (freq_range_hz[1] - freq_range_hz[0])
+            omega = 2.0 * math.pi * freq_hz
+            a0 = omega * source_half_width / max(c_s, 1e-14)
+
+        params[i, :] = [c11, c13, c33, c44, rho, eta, a0, omega]
 
     return params
 
@@ -65,7 +83,7 @@ def influencefunctions(
     lty: int,
     rho: float,
     omega: float,
-    damping: float,
+    eta: float,
     c11: float,
     c13: float,
     c33: float,
@@ -77,6 +95,7 @@ def influencefunctions(
     z_source: float,
     abs_tol: float,
 ) -> np.ndarray:
+    """Rajapakse-style strip-load influence kernels integrated over zeta."""
     if c11 == c33:
         c11 = c11 + 1e-5
 
@@ -100,9 +119,10 @@ def influencefunctions(
     def xi2(zeta: np.ndarray) -> np.ndarray:
         return np.sqrt((g * zeta**2) - 1.0 - alpha0 - np.sqrt(phi(zeta))) / np.sqrt(2.0 * alpha0)
 
-    alpha = alpha0 * (1.0 + (damping * j))
-    beta = beta0 * (1.0 + (damping * j))
-    kappa = kappa0 * (1.0 + (damping * j))
+    # Viscoelastic correspondence: c_ij* = c_ij (1 + i eta)
+    alpha = alpha0 * (1.0 + (eta * j))
+    beta = beta0 * (1.0 + (eta * j))
+    kappa = kappa0 * (1.0 + (eta * j))
 
     def kernel_bundle(zeta_raw: np.ndarray | float) -> np.ndarray:
         zeta = _safe_zeta(zeta_raw)
@@ -135,14 +155,16 @@ def influencefunctions(
         fun4 = np.where(np.isfinite(fun4), fun4, 0.0 + 0.0j)
 
         if lty == 0:
-            return np.vstack([
-                np.real(fun1),
-                np.imag(fun1),
-                np.real(fun3),
-                np.imag(fun3),
-                np.real(fun4),
-                np.imag(fun4),
-            ])
+            return np.vstack(
+                [
+                    np.real(fun1),
+                    np.imag(fun1),
+                    np.real(fun3),
+                    np.imag(fun3),
+                    np.real(fun4),
+                    np.imag(fun4),
+                ]
+            )
         raise NotImplementedError(f"Only lty=0 is implemented, got lty={lty}.")
 
     integrals, _ = quad_vec(kernel_bundle, 0.0, np.inf, epsabs=abs_tol)
@@ -167,7 +189,6 @@ def compute_sample(
     x_positions: np.ndarray,
     source_half_width: float,
     lty: int,
-    damping: float,
     z_field: float,
     z_source: float,
     abs_tol: float,
@@ -176,7 +197,7 @@ def compute_sample(
     n_points = x_positions.shape[0]
     g_full = np.zeros((2 * n_points, 2 * n_points), dtype=np.complex128)
 
-    c11, c13, c33, c44, rho, omega = [float(v) for v in params_row]
+    c11, c13, c33, c44, rho, eta, _, omega = [float(v) for v in params_row]
 
     for j in range(n_points):
         x_source = float(x_positions[j])
@@ -186,7 +207,7 @@ def compute_sample(
                 lty=lty,
                 rho=rho,
                 omega=omega,
-                damping=damping,
+                eta=eta,
                 c11=c11,
                 c13=c13,
                 c33=c33,
@@ -252,7 +273,6 @@ def _signature(args: argparse.Namespace) -> dict[str, object]:
         "lty": int(args.lty),
         "z_source": float(args.z_source),
         "z_field": float(args.z_field),
-        "damping": float(args.damping),
         "seed": int(args.seed),
         "abs_tol": float(args.abs_tol),
         "c44_min": float(args.c44_min),
@@ -265,8 +285,12 @@ def _signature(args: argparse.Namespace) -> dict[str, object]:
         "c13_ratio_max": float(args.c13_ratio_max),
         "rho_min": float(args.rho_min),
         "rho_max": float(args.rho_max),
-        "freq_min": float(args.freq_min),
-        "freq_max": float(args.freq_max),
+        "eta_min": float(args.eta_min),
+        "eta_max": float(args.eta_max),
+        "a0_min": float(args.a0_min),
+        "a0_max": float(args.a0_max),
+        "freq_min": None if args.freq_min is None else float(args.freq_min),
+        "freq_max": None if args.freq_max is None else float(args.freq_max),
     }
 
 
@@ -385,7 +409,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lty", type=int, default=0, help="Load type selector from the original MATLAB script.")
     parser.add_argument("--z-source", type=float, default=0.0)
     parser.add_argument("--z-field", type=float, default=0.0)
-    parser.add_argument("--damping", type=float, default=0.01)
+    parser.add_argument(
+        "--damping",
+        type=float,
+        default=None,
+        help="Deprecated alias for fixed eta. If set, eta_min=eta_max=damping.",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--abs-tol", type=float, default=5e-5, help="Absolute tolerance for quadrature.")
     parser.add_argument(
@@ -404,15 +433,38 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--c13-ratio-max", type=float, default=1.8)
     parser.add_argument("--rho-min", type=float, default=2000.0)
     parser.add_argument("--rho-max", type=float, default=3000.0)
-    parser.add_argument("--freq-min", type=float, default=10.0)
-    parser.add_argument("--freq-max", type=float, default=200.0)
+    parser.add_argument("--eta-min", type=float, default=0.005)
+    parser.add_argument("--eta-max", type=float, default=0.05)
+    parser.add_argument("--a0-min", type=float, default=0.05)
+    parser.add_argument("--a0-max", type=float, default=4.0)
+    parser.add_argument(
+        "--freq-min",
+        type=float,
+        default=None,
+        help="Optional frequency lower bound in Hz. If set with --freq-max, sampling is done in frequency space.",
+    )
+    parser.add_argument(
+        "--freq-max",
+        type=float,
+        default=None,
+        help="Optional frequency upper bound in Hz. If set with --freq-min, sampling is done in frequency space.",
+    )
     parser.add_argument(
         "--progress-every",
         type=int,
         default=5,
         help="Print and checkpoint progress every N completed samples.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if (args.freq_min is None) != (args.freq_max is None):
+        raise ValueError("Provide both --freq-min and --freq-max, or neither.")
+    if args.a0_min <= 0.0 or args.a0_max <= 0.0:
+        raise ValueError("a0 bounds must be positive.")
+    if args.eta_min < 0.0 or args.eta_max < 0.0:
+        raise ValueError("eta bounds must be non-negative.")
+
+    return args
 
 
 def main() -> None:
@@ -451,6 +503,26 @@ def main() -> None:
     else:
         _write_json_atomic(signature_path, {"signature_hash": signature_hash, "signature": signature})
 
+    x_positions = np.linspace(-args.half_span, args.half_span, args.n_points, dtype=float)
+    if args.n_points > 1:
+        dx = float(x_positions[1] - x_positions[0])
+    else:
+        dx = 2.0 * args.half_span
+    source_half_width = dx / 2.0
+
+    source_s1 = x_positions - source_half_width
+    source_s2 = x_positions + source_half_width
+
+    eta_min = float(args.eta_min)
+    eta_max = float(args.eta_max)
+    if args.damping is not None:
+        eta_min = float(args.damping)
+        eta_max = float(args.damping)
+
+    freq_range_hz = None
+    if args.freq_min is not None and args.freq_max is not None:
+        freq_range_hz = (float(args.freq_min), float(args.freq_max))
+
     params_array = sample_parameters(
         n_samples=args.n_samples,
         rng_seed=args.seed,
@@ -459,36 +531,40 @@ def main() -> None:
         c33_ratio_range=(args.c33_ratio_min, args.c33_ratio_max),
         c13_ratio_range=(args.c13_ratio_min, args.c13_ratio_max),
         rho_range=(args.rho_min, args.rho_max),
-        freq_range=(args.freq_min, args.freq_max),
+        eta_range=(eta_min, eta_max),
+        a0_range=(args.a0_min, args.a0_max),
+        source_half_width=source_half_width,
+        freq_range_hz=freq_range_hz,
     )
-
-    x_positions = np.linspace(-args.half_span, args.half_span, args.n_points, dtype=float)
-    if args.n_points > 1:
-        dx = float(x_positions[1] - x_positions[0])
-    else:
-        dx = 2.0 * args.half_span
-    source_half_width = dx / 2.0
 
     metadata = {
         "N": int(args.n_points),
         "L": float(args.half_span),
         "x_positions": x_positions.tolist(),
+        "source_element_s1": source_s1.tolist(),
+        "source_element_s2": source_s2.tolist(),
+        "source_element_midpoints": x_positions.tolist(),
         "dx": dx,
         "source_half_width": source_half_width,
         "strip_half_width": source_half_width,
-        "param_names": ["c11", "c13", "c33", "c44", "rho", "omega"],
+        "operator_query_layout": ["x_field", "s1_source", "s2_source"],
+        "params_array_layout": ["c11", "c13", "c33", "c44", "rho", "eta", "a0", "omega"],
+        "param_names": ["c11", "c13", "c33", "c44", "rho", "eta", "a0", "omega"],
         "param_ranges": {
             "c44": [args.c44_min, args.c44_max],
             "c11_ratio": [args.c11_ratio_min, args.c11_ratio_max],
             "c33_ratio": [args.c33_ratio_min, args.c33_ratio_max],
             "c13_ratio": [args.c13_ratio_min, args.c13_ratio_max],
             "rho": [args.rho_min, args.rho_max],
-            "freq": [args.freq_min, args.freq_max],
+            "eta": [eta_min, eta_max],
+            "a0": [args.a0_min, args.a0_max],
+            "frequency_hz": None if freq_range_hz is None else [freq_range_hz[0], freq_range_hz[1]],
         },
         "lty": int(args.lty),
         "z_source": float(args.z_source),
         "z_field": float(args.z_field),
-        "damping": float(args.damping),
+        "a0_definition": "a0 = omega * b / cS, cS = sqrt(c44/rho), b = source_half_width",
+        "formulation": "homogeneous_transversely_isotropic_halfspace_full_influence_matrix",
         "generator": "scripts/ground_vibration/generate_external_dataset.py",
     }
 
@@ -499,7 +575,6 @@ def main() -> None:
             x_positions,
             source_half_width,
             args.lty,
-            args.damping,
             args.z_field,
             args.z_source,
             args.abs_tol,

@@ -56,23 +56,61 @@ def preprocess_raw_data(raw_npz_filename: str,
     
     keys = [i for i in input_function_keys]
     branch_input = []
+    missing_branch_keys = []
     for k in keys:
         if k in data:
-            branch_input.append(data[k])
-    branch_input = np.array(branch_input).T
+            branch_input.append(np.asarray(data[k]))
+        else:
+            missing_branch_keys.append(k)
+    if missing_branch_keys:
+        raise KeyError(f"Missing required input_function_keys in raw dataset: {missing_branch_keys}")
+    branch_input = np.column_stack(branch_input)
 
-    coord_raw = np.asarray(data[coordinate_keys[0]])
-    if coord_raw.ndim == 1:
-        coord_vec = coord_raw
-    elif coord_raw.ndim == 2:
-        # Legacy datasets stored x as a mesh-like matrix.
-        coord_vec = np.asarray(coord_raw[:, 0])
-    else:
-        raise ValueError(
-            f"Unsupported coordinate array shape for '{coordinate_keys[0]}': {coord_raw.shape}"
+    coord_arrays: list[np.ndarray] = []
+    for key in coordinate_keys:
+        if key not in data:
+            raise KeyError(f"Missing coordinate key '{key}' in raw dataset.")
+        coord_arrays.append(np.asarray(data[key]))
+
+    if len(coord_arrays) == 1:
+        coord_raw = coord_arrays[0]
+        if coord_raw.ndim == 1:
+            coord_vec = coord_raw
+        elif coord_raw.ndim == 2:
+            # Legacy datasets stored x as a mesh-like matrix.
+            coord_vec = np.asarray(coord_raw[:, 0])
+        else:
+            raise ValueError(
+                f"Unsupported coordinate array shape for '{coordinate_keys[0]}': {coord_raw.shape}"
+            )
+        trunk_input = format_to_don((coord_vec, coord_vec))
+    elif len(coord_arrays) == 3:
+        # Operator query for homogeneous ground vibration:
+        # (x_m, s1_n, s2_n) for all collocation/source element pairs (m, n).
+        x_vec = np.asarray(coord_arrays[0], dtype=float).reshape(-1)
+        s1_vec = np.asarray(coord_arrays[1], dtype=float).reshape(-1)
+        s2_vec = np.asarray(coord_arrays[2], dtype=float).reshape(-1)
+        if s1_vec.shape[0] != s2_vec.shape[0]:
+            raise ValueError(
+                "Source geometry vectors must have same length. "
+                f"Got s1={s1_vec.shape[0]}, s2={s2_vec.shape[0]}."
+            )
+        n_field = x_vec.shape[0]
+        n_source = s1_vec.shape[0]
+        trunk_input = np.column_stack(
+            [
+                np.repeat(x_vec, n_source),
+                np.tile(s1_vec, n_field),
+                np.tile(s2_vec, n_field),
+            ]
         )
-
-    trunk_input = format_to_don((coord_vec, coord_vec))
+    else:
+        # Generic fallback: direct cartesian product meshgrid.
+        flattened = []
+        for arr in coord_arrays:
+            arr_flat = np.asarray(arr).reshape(-1)
+            flattened.append(arr_flat)
+        trunk_input = format_to_don(tuple(flattened))
 
     features = {
         processed_dataset_keys['features'][0]: branch_input,

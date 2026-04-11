@@ -23,9 +23,13 @@ def get_input_functions(data_cfg: DataConfig) -> dict[str, np.ndarray]:
     c13 = raw_data['c13']
     c33 = raw_data['c33']
     c44 = raw_data['c44']
-    rho = raw_data['ρ']
-    eta = raw_data['η'] if 'η' in raw_data else np.zeros_like(rho)
-    a0 = raw_data['a0'] if 'a0' in raw_data else raw_data['ω']
+    rho = raw_data['rho'] if 'rho' in raw_data else raw_data['ρ']
+    eta = raw_data['eta'] if 'eta' in raw_data else (
+        raw_data['η'] if 'η' in raw_data else np.zeros_like(rho)
+    )
+    a0 = raw_data['a0'] if 'a0' in raw_data else (
+        raw_data['omega'] if 'omega' in raw_data else raw_data['ω']
+    )
     input_functions = {
         data_cfg.input_functions[0]: c11,
         data_cfg.input_functions[1]: c13,
@@ -42,6 +46,10 @@ def get_coordinates(data_cfg: DataConfig) -> dict[str, np.ndarray]:
     raw_data = np.load(data_cfg.raw_data_path)
     x = raw_data['x']
     coordinates = {'x': x}
+    if 's1' in raw_data:
+        coordinates['s1'] = raw_data['s1']
+    if 's2' in raw_data:
+        coordinates['s2'] = raw_data['s2']
     return coordinates
 
 def format_target(displacements: np.ndarray, data_cfg: DataConfig) -> np.ndarray:

@@ -71,13 +71,19 @@ problems:
       - "100"
       - --half-span
       - "2.0"
-      - --damping
-      - "0.01"
+      - --a0-min
+      - "0.05"
+      - --a0-max
+      - "4.0"
+      - --eta-min
+      - "0.005"
+      - --eta-max
+      - "0.05"
     datagen_config: ./configs/problems/ground_vibration/datagen.yaml
     preprocessing_config: ./configs/problems/ground_vibration/config_preprocessing.yaml
     experiment_config: ./configs/problems/ground_vibration/config_experiment.yaml
     test_config: ./configs/problems/ground_vibration/config_test.yaml
-    canonical_dataset_version: 69c41c0a
+    canonical_dataset_version: 3636a9cc
     canonical_experiments:
       don: 2025-11-10_14-23-36
       fno: null

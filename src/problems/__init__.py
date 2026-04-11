@@ -1,6 +1,9 @@
 import importlib
 import pkgutil
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ProblemRegistry:
     _generators = {}
@@ -19,9 +22,6 @@ class ProblemRegistry:
     @classmethod
     def auto_discover(cls):
         """Simple auto-discovery that only needs to be called once"""
-        import importlib
-        from pathlib import Path
-        
         # Look in the current package directory
         package_path = Path(__file__).parent
         for dir_name in [d.name for d in package_path.iterdir() if d.is_dir()]:
@@ -29,7 +29,12 @@ class ProblemRegistry:
                 module = importlib.import_module(f".{dir_name}", package="src.problems")
                 if hasattr(module, "PROBLEM_NAME") and hasattr(module, "Generator"):
                     cls.register(module.PROBLEM_NAME, module.Generator)
-            except ImportError:
+            except Exception as exc:
+                logger.warning(
+                    "Skipping problem module '%s' during auto-discovery due to import error: %s",
+                    dir_name,
+                    exc,
+                )
                 continue
 
 # Auto-discover on first import

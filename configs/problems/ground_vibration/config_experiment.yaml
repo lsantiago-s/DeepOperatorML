@@ -1,5 +1,5 @@
-dataset_version: 69c41c0a
+dataset_version: 3636a9cc
 model: don
 precision: float32
 device: cpu 
-output_path: ./output # Script will create subdirectory with the problem name 'kelvin'.
+output_path: ./output # Script will create subdirectory with the problem name 'ground_vibration'.
