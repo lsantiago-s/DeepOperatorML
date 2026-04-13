@@ -1,4 +1,4 @@
-data_filename: ./data/raw/vertical_layered_soil/vertical_layered_soil_v3_layered.npz
+data_filename: ./data/raw/vertical_layered_soil/vertical_layered_soil_v4_profile_operator.npz
 executable_path: ./src/problems/vertical_layered_soil/libs/multilayer.exe
 
 seed: 42
@@ -19,6 +19,12 @@ a_ref: 1.0
 a0:
   min: 0.05
   max: 4.0
+
+# Profile encoding for branch input:
+# xb = [c11(z), c12(z), c13(z), c33(z), c44(z), rho(z), eta(z), a0]
+profile_encoding:
+  z_max: 2.0
+  num_points: 64
 
 # Mapping from solver channels to coupled blocks in U = [[Uxx,Uxz],[Uzx,Uzz]]
 block_channel_map:

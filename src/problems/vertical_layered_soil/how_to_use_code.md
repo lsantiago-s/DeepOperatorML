@@ -1,10 +1,11 @@
 # Vertical Layered Soil (full multilayer formulation)
 
-Este problema segue a formulação de solo estratificado vertical (N camadas sobre semi-espaço) com aprendizado da matriz de influência completa.
+Este problema segue a formulação de solo estratificado vertical com entrada em perfil de propriedades no eixo de profundidade e aprendizado da matriz de influência completa.
 
-- entrada: `s = [p^(1), ..., p^(N+1), a0]`
-- dimensão da entrada: `8(N+1)`
-- saída: matriz complexa `U ∈ C^(2M x 2M)` com blocos `Uxx, Uxz, Uzx, Uzz`
+- entrada branch: `xb = [c11(z), c12(z), c13(z), c33(z), c44(z), rho(z), eta(z), a0]`
+- dimensão da entrada: `7*Nz + 1` (com `Nz = profile_encoding.num_points`)
+- entrada trunk: `xt = (r_m, s1^n, s2^n)`
+- saída: canais complexos `[Uxx, Uxz, Uzx, Uzz]` por ponto de `xt`, equivalentes à matriz `U ∈ C^(2M x 2M)`
 
 ## Entrada do solver Fortran
 
@@ -22,8 +23,9 @@ Nesta pipeline:
 
 - `N` = número de camadas finitas
 - linha `N+1` = semi-espaço (usa `h = 0`)
-- frequência normalizada: `a0 = omega * a / cS1`
-- conversão usada no gerador: `omega = a0 * cS1 / a_ref`, com `cS1 = sqrt(c44^(1)/rho^(1))`
+- frequência normalizada: `a0 = omega * a / cS_ref`
+- conversão usada no gerador: `omega = a0 * cS_ref / a_ref`, com `cS_ref = sqrt(c44^(N+1)/rho^(N+1))`
+- perfis `theta(z)` são amostrados em grade uniforme `z in [0, z_max]` (configurável em `profile_encoding`)
 
 ## Canais e montagem da matriz U
 
@@ -68,17 +70,18 @@ Sanity plots para o dataset bruto:
 
 ```bash
 python3 src/problems/vertical_layered_soil/sanity_plots.py \
-  --raw-data ./data/raw/vertical_layered_soil/vertical_layered_soil_paper_baseline_v3.npz \
+  --raw-data ./data/raw/vertical_layered_soil/vertical_layered_soil_paper_baseline_v4_profile_operator.npz \
   --output-dir ./output/vertical_layered_soil/data_sanity
 ```
 
 ## Artefatos `.npz`
 
-- `xb`: `(num_samples, 8*(N+1))`
-- `xt`: `((2M)^2, 2)`
-- `g_u`: `(num_samples, (2M)^2)` complexo
+- `xb`: `(num_samples, 7*Nz + 1)` (perfil em profundidade + `a0`)
+- `xt`: `(M*M, 3)` com colunas `(r, s1, s2)`
+- `g_u`: `(num_samples, M*M, 4)` complexo (`Uxx,Uxz,Uzx,Uzz`)
+- `g_u_full`: `(num_samples, (2M)^2)` complexo (compatibilidade/diagnóstico)
 - `g_u_blocks`: `(num_samples, M, M, 4)` complexo (`Uxx,Uxz,Uzx,Uzz`)
-- `a0`, `omega`, `properties`, `paper_case_label`
+- `a0`, `omega`, `properties`, `profiles`, `z`, `r`, `s1`, `s2`, `paper_case_label`
 
 ## Visualizações e relatórios
 

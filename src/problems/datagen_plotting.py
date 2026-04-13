@@ -212,6 +212,86 @@ def _plot_multilayer_dataset(data: dict[str, np.ndarray], output_dir: Path) -> l
     return outputs
 
 
+def _to_full_matrix_from_channels(g_u: np.ndarray) -> np.ndarray:
+    arr = np.asarray(g_u)
+    if arr.ndim == 2:
+        n = int(round(np.sqrt(arr.shape[1])))
+        if n * n != arr.shape[1]:
+            raise ValueError(f"Cannot infer full matrix from g_u shape {arr.shape}.")
+        return np.asarray(arr, dtype=np.complex128).reshape(arr.shape[0], n, n)
+
+    if arr.ndim == 3 and arr.shape[-1] == 4:
+        m = int(round(np.sqrt(arr.shape[1])))
+        if m * m != arr.shape[1]:
+            raise ValueError(f"Cannot infer M from g_u shape {arr.shape}.")
+        ch = np.asarray(arr, dtype=np.complex128).reshape(arr.shape[0], m, m, 4)
+        full = np.zeros((arr.shape[0], 2 * m, 2 * m), dtype=np.complex128)
+        full[:, :m, :m] = ch[..., 0]
+        full[:, :m, m:] = ch[..., 1]
+        full[:, m:, :m] = ch[..., 2]
+        full[:, m:, m:] = ch[..., 3]
+        return full
+
+    raise ValueError(f"Unsupported vertical_layered_soil g_u shape: {arr.shape}")
+
+
+def _plot_vertical_layered_dataset(data: dict[str, np.ndarray], output_dir: Path) -> list[Path]:
+    _disable_latex_text()
+
+    g_u = np.asarray(data["g_u"])
+    full = _to_full_matrix_from_channels(g_u)
+    a0 = np.asarray(data["a0"], dtype=float) if "a0" in data else np.arange(full.shape[0], dtype=float)
+    labels = np.asarray(data["paper_case_label"]).astype(str) if "paper_case_label" in data else None
+
+    outputs: list[Path] = []
+    for sample_idx in _select_representative_indices(a0, max_count=3):
+        n = full.shape[1]
+        m = n // 2
+        blocks = {
+            "Uxx": np.abs(full[sample_idx, :m, :m]),
+            "Uxz": np.abs(full[sample_idx, :m, m:]),
+            "Uzx": np.abs(full[sample_idx, m:, :m]),
+            "Uzz": np.abs(full[sample_idx, m:, m:]),
+        }
+        fig, axes = plt.subplots(2, 2, figsize=(10, 9), constrained_layout=True)
+        for ax, block_name in zip(axes.flat, ("Uxx", "Uxz", "Uzx", "Uzz"), strict=True):
+            im = ax.imshow(blocks[block_name], origin="lower", cmap="magma")
+            ax.set_title(block_name)
+            ax.set_xlabel("source element")
+            ax.set_ylabel("receiver element")
+            fig.colorbar(im, ax=ax, fraction=0.046)
+
+        title = f"Vertical layered sample {sample_idx} | a0={a0[sample_idx]:.3f}"
+        if labels is not None:
+            title += f" | case={labels[sample_idx]}"
+        fig.suptitle(title)
+        out_path = output_dir / f"sanity_vertical_layered_sample{sample_idx:04d}.png"
+        _save_figure(fig, out_path)
+        outputs.append(out_path)
+
+    if "profiles" in data:
+        profiles = np.asarray(data["profiles"], dtype=float)
+        names = np.asarray(data.get("profile_keys", ["c11", "c12", "c13", "c33", "c44", "rho", "eta"])).astype(str)
+        sample_idx = int(_select_representative_indices(a0, max_count=1)[0]) if full.shape[0] > 0 else 0
+        fig, axes = plt.subplots(1, min(4, profiles.shape[1]), figsize=(4 * min(4, profiles.shape[1]), 3.5), constrained_layout=True)
+        axes = np.atleast_1d(axes)
+        for i, ax in enumerate(axes):
+            im = ax.imshow(
+                profiles[:, i, :],
+                aspect="auto",
+                origin="lower",
+                cmap="viridis",
+            )
+            ax.set_title(f"{names[i]}(z)")
+            ax.set_xlabel("depth index")
+            ax.set_ylabel("sample")
+            fig.colorbar(im, ax=ax, fraction=0.046)
+        out_path = output_dir / "sanity_vertical_layered_profiles.png"
+        _save_figure(fig, out_path)
+        outputs.append(out_path)
+    return outputs
+
+
 def generate_problem_dataset_plots(problem_name: str, data_path: str | Path) -> list[Path]:
     try:
         data_file = _resolve_path(data_path)
@@ -233,6 +313,8 @@ def generate_problem_dataset_plots(problem_name: str, data_path: str | Path) -> 
             return _plot_rajapakse_dataset(data=data, output_dir=output_dir, prefix=problem_name)
         if problem_name == "multilayer_horizontal_rocking":
             return _plot_multilayer_dataset(data=data, output_dir=output_dir)
+        if problem_name == "vertical_layered_soil":
+            return _plot_vertical_layered_dataset(data=data, output_dir=output_dir)
 
         logger.info("No dataset sanity plotting hook registered for %s. Skipping.", problem_name)
         return []

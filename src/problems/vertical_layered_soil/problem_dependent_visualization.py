@@ -191,29 +191,30 @@ def _save_common_contract_reports(
     test_cfg: TestConfig,
     data_cfg: DataConfig,
     plots_path: Path,
-    truth_test_matrix: np.ndarray,
-    pred_test_matrix: np.ndarray,
+    truth_test_channels: np.ndarray,
+    pred_test_channels: np.ndarray,
+    truth_test_full: np.ndarray,
+    pred_test_full: np.ndarray,
     axis_test: np.ndarray,
     axis_label: str,
-    mean_test_matrix: np.ndarray,
-    nn_test_matrix: np.ndarray,
+    mean_test_channels: np.ndarray,
+    nn_test_channels: np.ndarray,
+    channel_labels: list[str],
 ) -> None:
     metrics_dir = test_cfg.output_path / str(test_cfg.problem) / str(test_cfg.experiment_version) / "metrics"
     performance_plots_dir = plots_path / "performance_tracking"
     performance_plots_dir.mkdir(parents=True, exist_ok=True)
 
     method_pred = {
-        "ml_model": pred_test_matrix,
-        "mean_baseline": mean_test_matrix,
-        "nearest_neighbor_baseline": nn_test_matrix,
+        "ml_model": pred_test_channels,
+        "mean_baseline": mean_test_channels,
+        "nearest_neighbor_baseline": nn_test_channels,
     }
-    method_errors = {name: _relative_error_per_sample(truth_test_matrix, pred) for name, pred in method_pred.items()}
+    method_errors = {name: _relative_error_per_sample(truth_test_channels, pred) for name, pred in method_pred.items()}
 
-    n_channels = truth_test_matrix.shape[-1]
-    channel_labels = [f"ch{i}" for i in range(n_channels)]
     report = {
         "scope": "vertical layered full influence matrix surrogate",
-        "test_samples": int(truth_test_matrix.shape[0]),
+        "test_samples": int(truth_test_channels.shape[0]),
         "frequency_axis_label": axis_label,
         "methods": {},
     }
@@ -221,7 +222,7 @@ def _save_common_contract_reports(
         by_channel = {}
         for ch, label in enumerate(channel_labels):
             by_channel[label] = _summary(
-                _relative_error_per_sample(truth_test_matrix[..., ch], pred[..., ch])
+                _relative_error_per_sample(truth_test_channels[..., ch], pred[..., ch])
             )
         report["methods"][name] = {
             "overall": _summary(method_errors[name]),
@@ -236,25 +237,8 @@ def _save_common_contract_reports(
         "vs_nearest_neighbor_baseline": float(nn_baseline_mean / max(model_mean, 1e-14)),
     }
 
-    # Block-wise errors for full-matrix formulation U = [[Uxx,Uxz],[Uzx,Uzz]].
-    if truth_test_matrix.ndim == 4 and truth_test_matrix.shape[1] == truth_test_matrix.shape[2]:
-        n = int(truth_test_matrix.shape[1])
-        if n % 2 == 0:
-            m = n // 2
-            block_slices = {
-                "Uxx": (slice(0, m), slice(0, m)),
-                "Uxz": (slice(0, m), slice(m, n)),
-                "Uzx": (slice(m, n), slice(0, m)),
-                "Uzz": (slice(m, n), slice(m, n)),
-            }
-            block_report: dict[str, dict[str, float]] = {}
-            for block, (rs, cs) in block_slices.items():
-                block_err = _relative_error_per_sample(
-                    truth_test_matrix[:, rs, cs, :],
-                    pred_test_matrix[:, rs, cs, :],
-                )
-                block_report[block] = _summary(block_err)
-            report["ml_model_block_errors"] = block_report
+    eps_f = _relative_error_per_sample(truth_test_full, pred_test_full)
+    report["matrix_level_error_frobenius"] = _summary(eps_f)
 
     _save_yaml(metrics_dir / "baseline_performance_report.yaml", report)
     _save_metrics_table_csv(metrics_dir / "baseline_performance_table.csv", report, channel_labels)
@@ -275,7 +259,7 @@ def _save_common_contract_reports(
     inference_total = inference_timing["inference_total_s"]
     inference_per_sample = None
     if inference_total is not None:
-        inference_per_sample = inference_total / max(truth_test_matrix.shape[0], 1)
+        inference_per_sample = inference_total / max(truth_test_channels.shape[0], 1)
 
     timing_report = {
         "reference_solver": {
@@ -286,7 +270,7 @@ def _save_common_contract_reports(
         "inference": {
             "total_s": inference_total,
             "per_sample_s": inference_per_sample,
-            "test_samples": int(truth_test_matrix.shape[0]),
+            "test_samples": int(truth_test_channels.shape[0]),
         },
         "speedups": {},
     }
@@ -324,14 +308,16 @@ def plot_metrics(test_cfg: TestConfig, data_cfg: DataConfig) -> None:
 
     output_data = ppr.load_output_data(test_cfg)
     truth_test, pred_test, test_indices = ppr.get_truth_pred_complex(output_data=output_data, data_cfg=data_cfg)
-    truth_test_matrix = ppr.reshape_influence(truth_test)
-    pred_test_matrix = ppr.reshape_influence(pred_test)
+    truth_test_channels = ppr.reshape_channels(truth_test)
+    pred_test_channels = ppr.reshape_channels(pred_test)
+    truth_test_full = ppr.channels_to_full_matrix(truth_test_channels)
+    pred_test_full = ppr.channels_to_full_matrix(pred_test_channels)
 
     baselines = _compute_baselines(data_cfg=data_cfg)
     mean_test = ppr.to_complex_channels(baselines["mean_pred"])
     nn_test = ppr.to_complex_channels(baselines["nn_pred"])
-    mean_test_matrix = ppr.reshape_influence(mean_test)
-    nn_test_matrix = ppr.reshape_influence(nn_test)
+    mean_test_channels = ppr.reshape_channels(mean_test)
+    nn_test_channels = ppr.reshape_channels(nn_test)
 
     plots_path = (
         Path(test_cfg.output_path)
@@ -343,13 +329,13 @@ def plot_metrics(test_cfg: TestConfig, data_cfg: DataConfig) -> None:
 
     b_value = 0.0
     axis_label = "a0"
-    channel_names: list[str] | None = None
+    channel_names: list[str] = ["Uxx", "Uxz", "Uzx", "Uzz"]
     try:
         with open(data_cfg.raw_metadata_path, "r", encoding="utf-8") as f:
             raw_meta = yaml.safe_load(f)
         b_value = float(raw_meta.get("B", 0.0))
         axis_label = str(raw_meta.get("frequency_axis_label", axis_label))
-        if isinstance(raw_meta.get("g_u_channels"), list):
+        if isinstance(raw_meta.get("g_u_channels"), list) and len(raw_meta["g_u_channels"]) > 0:
             channel_names = [str(c) for c in raw_meta["g_u_channels"]]
     except Exception as exc:  # noqa: BLE001
         logger.warning("Could not parse B from raw metadata (%s). Using B=0.0", exc)
@@ -360,11 +346,25 @@ def plot_metrics(test_cfg: TestConfig, data_cfg: DataConfig) -> None:
     plot_helper.run_all_multilayer_plots(
         plots_path=plots_path,
         properties_all=np.asarray(raw_data["properties"], dtype=float),
+        profiles_all=(
+            np.asarray(raw_data["profiles"], dtype=float)
+            if "profiles" in raw_data
+            else None
+        ),
+        z_grid=(
+            np.asarray(raw_data["z"], dtype=float)
+            if "z" in raw_data
+            else None
+        ),
         omega_all=axis_all,
-        raw_u_all=np.asarray(raw_data["g_u"]) if "g_u" in raw_data else None,
+        raw_u_all=(
+            ppr.channels_to_full_matrix(ppr.reshape_channels(np.asarray(raw_data["g_u"])))
+            if "g_u" in raw_data
+            else None
+        ),
         case_labels_all=np.asarray(raw_data["paper_case_label"]) if "paper_case_label" in raw_data else None,
-        truth_test_matrix=truth_test_matrix,
-        pred_test_matrix=pred_test_matrix,
+        truth_test_matrix=truth_test_full,
+        pred_test_matrix=pred_test_full,
         test_indices=np.asarray(test_indices, dtype=int),
         case_labels_test=(
             np.asarray(raw_data["paper_case_label"])[np.asarray(test_indices, dtype=int)]
@@ -381,11 +381,14 @@ def plot_metrics(test_cfg: TestConfig, data_cfg: DataConfig) -> None:
         test_cfg=test_cfg,
         data_cfg=data_cfg,
         plots_path=plots_path,
-        truth_test_matrix=truth_test_matrix,
-        pred_test_matrix=pred_test_matrix,
+        truth_test_channels=truth_test_channels,
+        pred_test_channels=pred_test_channels,
+        truth_test_full=truth_test_full,
+        pred_test_full=pred_test_full,
         axis_test=axis_test,
         axis_label=axis_label,
-        mean_test_matrix=mean_test_matrix,
-        nn_test_matrix=nn_test_matrix,
+        mean_test_channels=mean_test_channels,
+        nn_test_channels=nn_test_channels,
+        channel_labels=channel_names,
     )
     logger.info("Finished vertical layered paper-style plotting.")

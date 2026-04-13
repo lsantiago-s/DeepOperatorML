@@ -124,11 +124,14 @@ python3 main.py --problem ground_vibration --test
 
 ### vertical_layered_soil
 
-This pipeline is aligned with the vertical layered full-influence formulation (`N` finite layers over a half-space):
+This pipeline is aligned with the vertical layered full-influence operator formulation:
 
-- input branch: `s = [p^(1), ..., p^(N+1), a0]`
-- input dimension: `8(N+1)` (includes finite-layer thicknesses and excludes half-space thickness)
-- output target: full complex matrix `U in C^(2M x 2M)` with blocks `Uxx, Uxz, Uzx, Uzz`
+- branch input: depth-profile encoding on a fixed grid `z in [0, z_max]`
+- branch layout: `xb = [c11(z), c12(z), c13(z), c33(z), c44(z), rho(z), eta(z), a0]`
+- branch dimension: `7 * Nz + 1` (`Nz = profile_encoding.num_points`)
+- trunk query: `(r_m, s1^n, s2^n)`
+- output channels per query: `[Uxx, Uxz, Uzx, Uzz]` (complex), equivalent to full `U in C^(2M x 2M)`
+- frequency normalization: `a0 = omega * a / cS_ref`, `cS_ref = sqrt(c44^(N+1)/rho^(N+1))` (half-space)
 
 Requires legacy executable path configured in datagen YAML.
 
@@ -154,7 +157,7 @@ Run raw-data sanity plots (after `gen_data`):
 
 ```bash
 python3 src/problems/vertical_layered_soil/sanity_plots.py \
-  --raw-data ./data/raw/vertical_layered_soil/vertical_layered_soil_paper_baseline_v3.npz \
+  --raw-data ./data/raw/vertical_layered_soil/vertical_layered_soil_paper_baseline_v4_profile_operator.npz \
   --output-dir ./output/vertical_layered_soil/data_sanity
 ```
 

@@ -49,7 +49,50 @@ def _plot_layer_properties(properties: np.ndarray, out: Path) -> None:
     plt.close(fig)
 
 
+def _plot_profile_tensor(profiles: np.ndarray, z_grid: np.ndarray | None, out: Path) -> None:
+    if profiles.ndim != 3 or profiles.shape[1] < 1:
+        return
+
+    names = ["c11", "c12", "c13", "c33", "c44", "rho", "eta"][: profiles.shape[1]]
+    rows = int(np.ceil(len(names) / 3))
+    fig, axes = plt.subplots(rows, 3, figsize=(14, 3.6 * rows), constrained_layout=True)
+    axes = np.atleast_1d(axes).reshape(rows, 3)
+
+    x = np.arange(profiles.shape[2], dtype=float) if z_grid is None else np.asarray(z_grid, dtype=float)
+    x_label = "depth index" if z_grid is None else "z/a"
+    for idx, name in enumerate(names):
+        ax = axes[idx // 3, idx % 3]
+        im = ax.imshow(profiles[:, idx, :], aspect="auto", origin="lower", cmap="viridis")
+        ax.set_title(f"{name}(z)")
+        ax.set_xlabel(x_label)
+        ax.set_ylabel("sample")
+        fig.colorbar(im, ax=ax, fraction=0.046)
+    for idx in range(len(names), rows * 3):
+        axes[idx // 3, idx % 3].axis("off")
+
+    fig.suptitle("Depth-profile encoding across samples")
+    fig.savefig(out / "profile_encoding_heatmaps.png", dpi=180)
+    plt.close(fig)
+
+
 def _plot_sample_matrix(g_u: np.ndarray, out: Path) -> None:
+    if g_u.ndim == 3 and g_u.shape[-1] == 4:
+        n = int(round(np.sqrt(g_u.shape[1])))
+        if n * n != g_u.shape[1]:
+            return
+        ch = g_u[0].reshape(n, n, 4)
+        block_names = ["Uxx", "Uxz", "Uzx", "Uzz"]
+        fig, axes = plt.subplots(2, 2, figsize=(10, 8), constrained_layout=True)
+        for ax, block_idx in zip(axes.flat, range(4), strict=True):
+            im = ax.imshow(np.abs(ch[..., block_idx]), origin="lower", cmap="magma")
+            ax.set_title(f"|{block_names[block_idx]}| sample 0")
+            ax.set_xlabel("source element")
+            ax.set_ylabel("receiver element")
+            fig.colorbar(im, ax=ax, fraction=0.046)
+        fig.savefig(out / "sample0_blocks_abs.png", dpi=180)
+        plt.close(fig)
+        return
+
     if g_u.ndim != 2:
         return
     n = int(round(np.sqrt(g_u.shape[1])))
@@ -93,22 +136,29 @@ def main() -> None:
     xb = np.asarray(data["xb"], dtype=float)
     properties = np.asarray(data["properties"], dtype=float)
     g_u = np.asarray(data["g_u"])
+    profiles = np.asarray(data["profiles"], dtype=float) if "profiles" in data else None
+    z_grid = np.asarray(data["z"], dtype=float) if "z" in data else None
 
     _plot_branch_heatmap(xb=xb, out=out_dir)
     _plot_layer_properties(properties=properties, out=out_dir)
+    if profiles is not None:
+        _plot_profile_tensor(profiles=profiles, z_grid=z_grid, out=out_dir)
     _plot_sample_matrix(g_u=g_u, out=out_dir)
 
+    outputs = [
+        "branch_input_heatmap.png",
+        "layer_property_profiles.png",
+        "profile_encoding_heatmaps.png" if profiles is not None else None,
+        "sample0_blocks_abs.png" if (g_u.ndim == 3 and g_u.shape[-1] == 4) else "sample0_full_matrix.png",
+    ]
     report = {
         "raw_data": str(raw_data_path),
         "num_samples": int(xb.shape[0]),
         "xb_shape": list(xb.shape),
         "properties_shape": list(properties.shape),
         "g_u_shape": list(g_u.shape),
-        "outputs": [
-            "branch_input_heatmap.png",
-            "layer_property_profiles.png",
-            "sample0_full_matrix.png",
-        ],
+        "profiles_shape": list(profiles.shape) if profiles is not None else None,
+        "outputs": [x for x in outputs if x is not None],
     }
     with open(out_dir / "sanity_report.yaml", "w", encoding="utf-8") as f:
         yaml.safe_dump(report, f, sort_keys=False)

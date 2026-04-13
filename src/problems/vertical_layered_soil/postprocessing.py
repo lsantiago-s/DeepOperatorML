@@ -55,11 +55,80 @@ def infer_grid_size(num_points: int) -> int:
     return m
 
 
-def reshape_influence(influence: np.ndarray) -> np.ndarray:
-    """Return influence as (samples, M, M, channels), complex."""
+def reshape_channels(influence: np.ndarray) -> np.ndarray:
+    """Return influence channels as (samples, M, M, 4), complex."""
     influence_complex = to_complex_channels(influence)
-    m = infer_grid_size(influence_complex.shape[1])
-    return influence_complex.reshape(influence_complex.shape[0], m, m, influence_complex.shape[2])
+
+    if influence_complex.ndim == 2:
+        # Legacy layout: flattened full matrix scalar channel.
+        n = infer_grid_size(influence_complex.shape[1])
+        if n % 2 != 0:
+            raise ValueError(f"Legacy full matrix size must be even. Got n={n}.")
+        full = influence_complex.reshape(influence_complex.shape[0], n, n)
+        m = n // 2
+        return np.stack(
+            [
+                full[:, :m, :m],
+                full[:, :m, m:],
+                full[:, m:, :m],
+                full[:, m:, m:],
+            ],
+            axis=-1,
+        )
+
+    if influence_complex.ndim != 3:
+        raise ValueError(
+            f"Expected influence with ndim=2 or 3 after channel conversion, got shape {influence_complex.shape}."
+        )
+
+    n_points = influence_complex.shape[1]
+    n_channels = influence_complex.shape[2]
+
+    if n_channels == 4:
+        m = infer_grid_size(n_points)
+        return influence_complex.reshape(influence_complex.shape[0], m, m, 4)
+
+    if n_channels == 1:
+        n = infer_grid_size(n_points)
+        if n % 2 != 0:
+            raise ValueError(f"Single-channel full matrix size must be even. Got n={n}.")
+        full = influence_complex[..., 0].reshape(influence_complex.shape[0], n, n)
+        m = n // 2
+        return np.stack(
+            [
+                full[:, :m, :m],
+                full[:, :m, m:],
+                full[:, m:, :m],
+                full[:, m:, m:],
+            ],
+            axis=-1,
+        )
+
+    raise ValueError(
+        f"Unsupported number of complex channels ({n_channels}). Expected 1 or 4 for vertical_layered_soil."
+    )
+
+
+def channels_to_full_matrix(channels: np.ndarray) -> np.ndarray:
+    """Convert (samples, M, M, 4) channels [Uxx,Uxz,Uzx,Uzz] to full U matrix (samples, 2M, 2M)."""
+    arr = np.asarray(channels, dtype=np.complex128)
+    if arr.ndim != 4 or arr.shape[-1] != 4:
+        raise ValueError(f"Expected channels with shape (samples, M, M, 4), got {arr.shape}.")
+
+    samples, m, _, _ = arr.shape
+    full = np.zeros((samples, 2 * m, 2 * m), dtype=np.complex128)
+    full[:, :m, :m] = arr[..., 0]
+    full[:, :m, m:] = arr[..., 1]
+    full[:, m:, :m] = arr[..., 2]
+    full[:, m:, m:] = arr[..., 3]
+    return full
+
+
+def reshape_influence(influence: np.ndarray) -> np.ndarray:
+    """Backward-compatible helper returning full matrices as (samples, 2M, 2M, 1), complex."""
+    channels = reshape_channels(influence)
+    full = channels_to_full_matrix(channels)
+    return full[..., None]
 
 
 def get_truth_pred_complex(

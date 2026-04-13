@@ -294,6 +294,8 @@ def _plot_sample_full_matrix_heatmaps(
 def _save_formulation_report(
     save_path: Path,
     properties_all: np.ndarray,
+    profiles_all: np.ndarray | None,
+    z_grid: np.ndarray | None,
     axis_values: np.ndarray,
     truth_blocks: dict[str, np.ndarray],
     pred_blocks: dict[str, np.ndarray],
@@ -308,21 +310,40 @@ def _save_formulation_report(
     n_rows = int(properties_all.shape[1])
     n_layers = n_rows - 1
 
-    input_layout: list[str] = []
-    for idx in range(1, n_rows + 1):
-        input_layout.extend(
-            [
-                f"c11_{idx}",
-                f"c12_{idx}",
-                f"c13_{idx}",
-                f"c33_{idx}",
-                f"c44_{idx}",
-                f"eta_{idx}",
-                f"rho_{idx}",
-            ]
-        )
-    input_layout.extend([f"h_{idx}" for idx in range(1, n_layers + 1)])
-    input_layout.append("a0")
+    if profiles_all is not None and z_grid is not None:
+        profile_keys = ["c11", "c12", "c13", "c33", "c44", "rho", "eta"]
+        input_layout = []
+        for key in profile_keys:
+            input_layout.extend([f"{key}(z_{idx})" for idx in range(int(z_grid.shape[0]))])
+        input_layout.append("a0")
+        branch_repr = {
+            "type": "depth_profiles",
+            "profile_keys": profile_keys,
+            "num_depth_points": int(z_grid.shape[0]),
+            "z_min": float(np.min(z_grid)),
+            "z_max": float(np.max(z_grid)),
+            "profiles_shape": list(np.asarray(profiles_all).shape),
+        }
+    else:
+        input_layout = []
+        for idx in range(1, n_rows + 1):
+            input_layout.extend(
+                [
+                    f"c11_{idx}",
+                    f"c12_{idx}",
+                    f"c13_{idx}",
+                    f"c33_{idx}",
+                    f"c44_{idx}",
+                    f"eta_{idx}",
+                    f"rho_{idx}",
+                ]
+            )
+        input_layout.extend([f"h_{idx}" for idx in range(1, n_layers + 1)])
+        input_layout.append("a0")
+        branch_repr = {
+            "type": "layer_parameter_vector_legacy",
+            "formula": "8*(N+1)",
+        }
 
     eta_ranges = [
         [float(np.min(properties_all[:, row_idx, 5])), float(np.max(properties_all[:, row_idx, 5]))]
@@ -357,17 +378,22 @@ def _save_formulation_report(
         "input_definition": {
             "dim": int(len(input_layout)),
             "layout": input_layout,
+            "representation": branch_repr,
         },
         "output_definition": {
             "matrix_shape": [int(truth_blocks["Uxx"].shape[1] * 2), int(truth_blocks["Uxx"].shape[2] * 2)],
             "blocks": ["Uxx", "Uxz", "Uzx", "Uzz"],
             "complex": True,
         },
+        "operator_contract": {
+            "mapping": "{theta(z)}_theta, a0, (r_m, s1_n, s2_n) -> [Uxx, Uxz, Uzx, Uzz]_(m,n)",
+            "trunk_query": ["r", "s1", "s2"],
+        },
         "dataset_summary": dataset_summary,
         "block_mean_relative_errors": block_errors,
         "paper_reference": {
             "labaki_2014_vertical_layered": True,
-            "note": "Legacy exact-stiffness layered solver; current target is full coupled U matrix.",
+            "note": "Exact-stiffness layered solver with profile-based operator input encoding.",
         },
     }
 
@@ -378,6 +404,8 @@ def _save_formulation_report(
 def run_all_multilayer_plots(
     plots_path: Path,
     properties_all: np.ndarray,
+    profiles_all: np.ndarray | None,
+    z_grid: np.ndarray | None,
     omega_all: np.ndarray,
     raw_u_all: np.ndarray | None,
     case_labels_all: np.ndarray | None,
@@ -404,6 +432,8 @@ def run_all_multilayer_plots(
     _save_formulation_report(
         save_path=paths["alignment"] / "formulation_alignment.yaml",
         properties_all=np.asarray(properties_all, dtype=float),
+        profiles_all=(None if profiles_all is None else np.asarray(profiles_all, dtype=float)),
+        z_grid=(None if z_grid is None else np.asarray(z_grid, dtype=float)),
         axis_values=axis_values_all,
         truth_blocks=truth_blocks,
         pred_blocks=pred_blocks,

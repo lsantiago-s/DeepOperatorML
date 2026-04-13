@@ -1,5 +1,5 @@
 # ---------------------- Location of raw data ----------------
-raw_data_path: ./data/raw/vertical_layered_soil/vertical_layered_soil_paper_damping_v3.npz
+raw_data_path: ./data/raw/vertical_layered_soil/vertical_layered_soil_paper_damping_v4_profile_operator.npz
 
 # ------------------------- Dataset parameters ----------------
 problem: vertical_layered_soil
@@ -11,45 +11,37 @@ data_labels:
   features: [xb, xt]
   targets: [g_u]
 
-# N=2 contract => dim 8*(N+1) = 24.
+# Profile contract: dim = 7 * Nz + 1, where Nz is profile_encoding.num_points in datagen config.
 input_function_keys:
   - xb
 
 input_function_labels:
-  - '$c_{11}^{(1)}$'
-  - '$c_{12}^{(1)}$'
-  - '$c_{13}^{(1)}$'
-  - '$c_{33}^{(1)}$'
-  - '$c_{44}^{(1)}$'
-  - '$\eta^{(1)}$'
-  - '$\rho^{(1)}$'
-  - '$c_{11}^{(2)}$'
-  - '$c_{12}^{(2)}$'
-  - '$c_{13}^{(2)}$'
-  - '$c_{33}^{(2)}$'
-  - '$c_{44}^{(2)}$'
-  - '$\eta^{(2)}$'
-  - '$\rho^{(2)}$'
-  - '$c_{11}^{(3)}$'
-  - '$c_{12}^{(3)}$'
-  - '$c_{13}^{(3)}$'
-  - '$c_{33}^{(3)}$'
-  - '$c_{44}^{(3)}$'
-  - '$\eta^{(3)}$'
-  - '$\rho^{(3)}$'
-  - '$\bar{h}_1$'
-  - '$\bar{h}_2$'
+  - '$\text{profile}(z)$'
   - '$a_0$'
 
 coordinate_keys:
-  - xt
+  - r
+  - s1
+  - s2
 
 output_keys:
-  - re_u
-  - im_u
+  - re_uxx
+  - re_uxz
+  - re_uzx
+  - re_uzz
+  - im_uxx
+  - im_uxz
+  - im_uzx
+  - im_uzz
 
 output_labels:
-  - '$\Re(U)$'
-  - '$\Im(U)$'
+  - '$\Re(U_{xx})$'
+  - '$\Re(U_{xz})$'
+  - '$\Re(U_{zx})$'
+  - '$\Re(U_{zz})$'
+  - '$\Im(U_{xx})$'
+  - '$\Im(U_{xz})$'
+  - '$\Im(U_{zx})$'
+  - '$\Im(U_{zz})$'
 
 var_share: 0.95

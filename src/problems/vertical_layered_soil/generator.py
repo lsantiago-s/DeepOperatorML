@@ -29,6 +29,17 @@ class VerticalLayeredSoilGenerator(BaseProblemGenerator):
         "uzz": ("SAIDA_UZZ_W.out", "SAIDA_UZZ_.out"),
     }
 
+    PROFILE_KEYS = ("c11", "c12", "c13", "c33", "c44", "rho", "eta")
+    PROFILE_PROPERTY_INDEX = {
+        "c11": 0,
+        "c12": 1,
+        "c13": 2,
+        "c33": 3,
+        "c44": 4,
+        "eta": 5,
+        "rho": 6,
+    }
+
     # Vertical layered paper baseline material families (Labaki et al., 2014 style).
     PAPER_BASELINE_MATERIALS = {
         "m1": {"c11": 3.0000, "c12": 1.0000, "c13": 1.0000, "c33": 3.0000, "c44": 1.0000, "eta": 0.01, "rho": 1.0},
@@ -281,12 +292,93 @@ class VerticalLayeredSoilGenerator(BaseProblemGenerator):
             return float(rng.uniform(float(omega_cfg["min"]), float(omega_cfg["max"])))
         return float(rng.uniform(float(a0_cfg["min"]), float(a0_cfg["max"])))
 
-    def _compute_omega_from_a0(self, a0: float, first_layer: np.ndarray) -> float:
-        c44 = float(first_layer[4])
-        rho = float(first_layer[6])
+    def _compute_omega_from_a0(self, a0: float, reference_row: np.ndarray) -> float:
+        c44 = float(reference_row[4])
+        rho = float(reference_row[6])
         a_ref = float(self.config.get("a_ref", 1.0))
-        c_s1 = np.sqrt(c44 / max(rho, 1e-14))
-        return float(a0 * c_s1 / max(a_ref, 1e-14))
+        c_s_ref = np.sqrt(c44 / max(rho, 1e-14))
+        return float(a0 * c_s_ref / max(a_ref, 1e-14))
+
+    @staticmethod
+    def _build_radial_geometry(m_value: int, b_value: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        if m_value < 1:
+            raise ValueError(f"M must be >= 1. Got {m_value}.")
+        if not (0.0 <= b_value < 1.0):
+            raise ValueError(f"B must satisfy 0 <= B < 1. Got {b_value}.")
+
+        edges = np.linspace(b_value, 1.0, m_value + 1, dtype=float)
+        r = 0.5 * (edges[:-1] + edges[1:])
+        s1 = edges[:-1]
+        s2 = edges[1:]
+        return r, s1, s2
+
+    @staticmethod
+    def _build_query_geometry(r: np.ndarray, s1: np.ndarray, s2: np.ndarray) -> np.ndarray:
+        n_field = int(r.shape[0])
+        n_source = int(s1.shape[0])
+        if s2.shape[0] != n_source:
+            raise ValueError(
+                f"Source geometry vectors must have same length, got len(s1)={n_source}, len(s2)={s2.shape[0]}."
+            )
+        return np.column_stack(
+            [
+                np.repeat(r, n_source),
+                np.tile(s1, n_field),
+                np.tile(s2, n_field),
+            ]
+        )
+
+    @staticmethod
+    def _channels_from_blocks(blocks: dict[str, np.ndarray]) -> np.ndarray:
+        return np.stack(
+            [
+                np.asarray(blocks["Uxx"]).reshape(-1),
+                np.asarray(blocks["Uxz"]).reshape(-1),
+                np.asarray(blocks["Uzx"]).reshape(-1),
+                np.asarray(blocks["Uzz"]).reshape(-1),
+            ],
+            axis=-1,
+        )
+
+    def _build_depth_grid(self) -> np.ndarray:
+        profile_cfg = self.config.get("profile_encoding", {})
+        z_max = float(profile_cfg.get("z_max", 2.0))
+        n_points = int(profile_cfg.get("num_points", 64))
+        if z_max <= 0.0:
+            raise ValueError(f"profile_encoding.z_max must be > 0. Got {z_max}.")
+        if n_points < 2:
+            raise ValueError(f"profile_encoding.num_points must be >= 2. Got {n_points}.")
+        return np.linspace(0.0, z_max, n_points, dtype=float)
+
+    def _build_profiles(self, properties: np.ndarray, z_grid: np.ndarray) -> np.ndarray:
+        n_rows = int(properties.shape[0])
+        n_layers = n_rows - 1
+        if n_layers < 1:
+            raise ValueError("Properties must include at least one finite layer plus the half-space.")
+
+        finite_h = np.asarray(properties[:n_layers, 7], dtype=float)
+        if np.any(finite_h < 0.0):
+            raise ValueError(f"Finite-layer thicknesses must be non-negative. Got {finite_h}.")
+        interfaces = np.cumsum(finite_h)
+        row_idx = np.searchsorted(interfaces, z_grid, side="right")
+        row_idx = np.clip(row_idx, 0, n_layers)
+
+        profiles = np.zeros((len(self.PROFILE_KEYS), z_grid.shape[0]), dtype=float)
+        for key_idx, key in enumerate(self.PROFILE_KEYS):
+            col_idx = self.PROFILE_PROPERTY_INDEX[key]
+            profiles[key_idx, :] = properties[row_idx, col_idx]
+        return profiles
+
+    @staticmethod
+    def _build_profile_branch_input(profiles: np.ndarray, a0: float) -> np.ndarray:
+        return np.concatenate([profiles.reshape(-1), np.asarray([a0], dtype=float)])
+
+    def _build_input_layout(self, z_grid: np.ndarray) -> list[str]:
+        labels: list[str] = []
+        for key in self.PROFILE_KEYS:
+            labels.extend([f"{key}(z_{idx})" for idx in range(z_grid.shape[0])])
+        labels.append("a0")
+        return labels
 
     def _sample_layer(self, rng: np.random.Generator, sampling: dict[str, Any]) -> np.ndarray:
         c11_min, c11_max = map(float, sampling["c11"])
@@ -397,35 +489,6 @@ class VerticalLayeredSoilGenerator(BaseProblemGenerator):
 
         return props, case_label
 
-    @staticmethod
-    def _build_branch_input(properties: np.ndarray, a0: float) -> np.ndarray:
-        # Input contract for vertical layered soil:
-        # [all layer materials (7*(N+1)), finite-layer thicknesses (N), a0] => 8*(N+1)
-        n_rows = int(properties.shape[0])
-        n_layers = n_rows - 1
-        material_flat = properties[:, :7].reshape(-1)
-        finite_h = properties[:n_layers, 7]
-        return np.concatenate([material_flat, finite_h, np.asarray([a0], dtype=float)])
-
-    @staticmethod
-    def _build_input_layout(n_layers: int) -> list[str]:
-        labels: list[str] = []
-        for idx in range(1, n_layers + 2):
-            labels.extend(
-                [
-                    f"c11_{idx}",
-                    f"c12_{idx}",
-                    f"c13_{idx}",
-                    f"c33_{idx}",
-                    f"c44_{idx}",
-                    f"eta_{idx}",
-                    f"rho_{idx}",
-                ]
-            )
-        labels.extend([f"h_{idx}" for idx in range(1, n_layers + 1)])
-        labels.append("a0")
-        return labels
-
     def generate(self) -> None:
         start = time.perf_counter()
 
@@ -445,7 +508,9 @@ class VerticalLayeredSoilGenerator(BaseProblemGenerator):
 
         xb_rows: list[np.ndarray] = []
         properties_samples: list[np.ndarray] = []
+        profile_samples: list[np.ndarray] = []
         g_u_samples: list[np.ndarray] = []
+        g_u_full_samples: list[np.ndarray] = []
         block_samples: list[np.ndarray] = []
         a0_samples: list[float] = []
         omega_samples: list[float] = []
@@ -453,12 +518,9 @@ class VerticalLayeredSoilGenerator(BaseProblemGenerator):
         rejected_total = 0
         retries_per_sample: list[int] = []
 
-        n_dof = 2 * m_value
-        dof_axis = np.arange(n_dof, dtype=float)
-        if n_dof > 1:
-            dof_axis = dof_axis / (n_dof - 1)
-        ii, jj = np.meshgrid(dof_axis, dof_axis, indexing="ij")
-        xt = np.column_stack([ii.ravel(), jj.ravel()])
+        r, s1, s2 = self._build_radial_geometry(m_value=m_value, b_value=b_value)
+        xt = self._build_query_geometry(r=r, s1=s1, s2=s2)
+        z_grid = self._build_depth_grid()
 
         sampling_mode = str(self.config.get("sampling", {}).get("mode", "random")).lower()
         if sampling_mode not in {"random", "paper_case"}:
@@ -480,7 +542,7 @@ class VerticalLayeredSoilGenerator(BaseProblemGenerator):
                     props, case_label = self._sample_properties_random(rng)
 
                 a0_val = self._sample_a0(rng)
-                omega_val = self._compute_omega_from_a0(a0=a0_val, first_layer=props[0, :7])
+                omega_val = self._compute_omega_from_a0(a0=a0_val, reference_row=props[-1, :7])
                 attempt_idx = sample_retries + 1
 
                 logger.info(
@@ -528,11 +590,15 @@ class VerticalLayeredSoilGenerator(BaseProblemGenerator):
                     max_attempts_per_sample,
                 )
 
-            xb = self._build_branch_input(properties=props, a0=a0_val)
+            profiles = self._build_profiles(properties=props, z_grid=z_grid)
+            xb = self._build_profile_branch_input(profiles=profiles, a0=a0_val)
+            g_u_channels = self._channels_from_blocks(blocks=blocks)
 
             xb_rows.append(xb)
             properties_samples.append(props)
-            g_u_samples.append(u_full.ravel())
+            profile_samples.append(profiles)
+            g_u_samples.append(g_u_channels)
+            g_u_full_samples.append(u_full.ravel())
             block_samples.append(np.stack([blocks["Uxx"], blocks["Uxz"], blocks["Uzx"], blocks["Uzz"]], axis=-1))
             a0_samples.append(a0_val)
             omega_samples.append(omega_val)
@@ -544,7 +610,9 @@ class VerticalLayeredSoilGenerator(BaseProblemGenerator):
 
         xb_arr = np.asarray(xb_rows, dtype=float)
         props_arr = np.asarray(properties_samples, dtype=float)
+        profiles_arr = np.asarray(profile_samples, dtype=float)
         g_u_arr = np.asarray(g_u_samples, dtype=np.complex128)
+        g_u_full_arr = np.asarray(g_u_full_samples, dtype=np.complex128)
         g_blocks_arr = np.asarray(block_samples, dtype=np.complex128)
         a0_arr = np.asarray(a0_samples, dtype=float)
         omega_arr = np.asarray(omega_samples, dtype=float)
@@ -558,19 +626,33 @@ class VerticalLayeredSoilGenerator(BaseProblemGenerator):
             xb=xb_arr,
             xt=xt,
             g_u=g_u_arr,
+            g_u_full=g_u_full_arr,
             g_u_blocks=g_blocks_arr,
             a0=a0_arr,
             omega=omega_arr,
             properties=props_arr,
+            profiles=profiles_arr,
+            z=z_grid,
+            r=r,
+            s1=s1,
+            s2=s2,
+            profile_keys=np.asarray(self.PROFILE_KEYS, dtype="U16"),
+            g_u_channels=np.asarray(["Uxx", "Uxz", "Uzx", "Uzz"], dtype="U8"),
             paper_case_label=np.asarray(sampled_case_labels, dtype="U16"),
             block_names=np.asarray(["Uxx", "Uxz", "Uzx", "Uzz"], dtype="U8"),
         )
 
         duration = time.perf_counter() - start
-        input_layout = self._build_input_layout(n_layers=n_layers)
+        input_layout = self._build_input_layout(z_grid=z_grid)
         metadata = {
             "generator": "VerticalLayeredSoilGenerator",
             "formulation": "vertical_layered_full_matrix",
+            "operator_contract": {
+                "mapping": "{theta(z)}_theta, a0, (r_m, s1_n, s2_n) -> [Uxx, Uxz, Uzx, Uzz]_(m,n)",
+                "branch_input": "piecewise-constant depth profiles sampled on fixed z-grid",
+                "trunk_input": ["r", "s1", "s2"],
+                "target_channels": ["Uxx", "Uxz", "Uzx", "Uzz"],
+            },
             "runtime_s": float(duration),
             "runtime_ms": float(duration * 1e3),
             "timing_breakdown": {
@@ -584,8 +666,10 @@ class VerticalLayeredSoilGenerator(BaseProblemGenerator):
             "N_layers": n_layers,
             "M": m_value,
             "B": b_value,
-            "input_dim": int(8 * (n_layers + 1)),
+            "input_dim": int(xb_arr.shape[1]),
             "input_layout": input_layout,
+            "coordinate_layout": ["r", "s1", "s2"],
+            "g_u_channels": ["Uxx", "Uxz", "Uzx", "Uzz"],
             "output_layout": {
                 "matrix_shape": [2 * m_value, 2 * m_value],
                 "blocks": ["Uxx", "Uxz", "Uzx", "Uzz"],
@@ -593,13 +677,26 @@ class VerticalLayeredSoilGenerator(BaseProblemGenerator):
                     "block_channel_map",
                     {"uxx": "urfx", "uzx": "uzfx", "uxz": "urmy", "uzz": "uzmy"},
                 ),
+                "channel_tensor_shape_per_sample": [m_value * m_value, 4],
             },
             "a0_range": [float(np.min(a0_arr)), float(np.max(a0_arr))],
             "omega_range": [float(np.min(omega_arr)), float(np.max(omega_arr))],
+            "frequency_axis_label": "a0",
+            "a0_definition": "a0 = omega * a_ref / cS_ref, cS_ref = sqrt(c44_halfspace / rho_halfspace)",
             "xb_shape": list(xb_arr.shape),
             "xt_shape": list(xt.shape),
             "g_u_shape": list(g_u_arr.shape),
+            "g_u_full_shape": list(g_u_full_arr.shape),
             "g_u_blocks_shape": list(g_blocks_arr.shape),
+            "profiles_shape": list(profiles_arr.shape),
+            "profile_encoding": {
+                "z_max": float(np.max(z_grid)),
+                "num_points": int(z_grid.shape[0]),
+                "z_grid_min": float(np.min(z_grid)),
+                "z_grid_max": float(np.max(z_grid)),
+                "property_order": list(self.PROFILE_KEYS),
+                "branch_dim_formula": "len(property_order) * num_points + 1 (a0)",
+            },
             "properties_layout": ["c11", "c12", "c13", "c33", "c44", "eta", "rho", "h"],
             "config_snapshot": self.config,
             "max_attempts_per_sample": max_attempts_per_sample,
