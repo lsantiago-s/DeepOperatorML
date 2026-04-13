@@ -6,7 +6,7 @@ import numpy as np
 from typing import Any
 from pathlib import Path
 from tqdm.auto import tqdm
-from src.problems.rajapakse_fixed_material.influence import influence, load_native_library
+from src.problems.rajapakse_fixed_material.influence import _ensure_library_available, influence
 from src.problems.base_generator import BaseProblemGenerator
 
 logger = logging.getLogger(__name__)
@@ -48,6 +48,8 @@ class RajapakseFixedMaterialGenerator(BaseProblemGenerator):
         else:
             self.config_path = None
             self.config = self._normalize_config(config)
+        self._normalize_config_aliases()
+        self._coerce_numeric_scalars()
 
     def load_config(self):
         if self.config_path:
@@ -69,6 +71,30 @@ class RajapakseFixedMaterialGenerator(BaseProblemGenerator):
                 normalized[key] = float(normalized[key])
 
         return normalized
+
+    def _normalize_config_aliases(self) -> None:
+        aliases = {
+            "N_R": "N_r",
+            "N_Z": "N_z",
+        }
+        for old, new in aliases.items():
+            if old in self.config and new not in self.config:
+                self.config[new] = self.config[old]
+
+    def _coerce_numeric_scalars(self) -> None:
+        int_keys = ["N", "N_r", "N_z", "component", "loadtype", "bvptype"]
+        float_keys = [
+            "E", "nu", "dens", "damp",
+            "omega_min", "omega_max",
+            "r_min", "r_max", "z_min", "z_max",
+            "r_source", "z_source", "l_source",
+        ]
+        for key in int_keys:
+            if key in self.config and isinstance(self.config[key], str):
+                self.config[key] = int(float(self.config[key]))
+        for key in float_keys:
+            if key in self.config and isinstance(self.config[key], str):
+                self.config[key] = float(self.config[key])
 
     def _get_input_functions(self):
         """Generate branch input functions by sampling normalized frequencies for a fixed material.
@@ -161,9 +187,7 @@ class RajapakseFixedMaterialGenerator(BaseProblemGenerator):
         return wd, duration
 
     def generate(self):
-        # Fail fast before starting the expensive integration loop if the native
-        # Rajapakse solver cannot be loaded on this machine.
-        load_native_library()
+        _ensure_library_available()
         delta = self._get_input_functions()
         coordinates = self._get_coordinates()
         r_field, z_field = coordinates
