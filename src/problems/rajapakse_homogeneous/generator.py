@@ -7,7 +7,7 @@ from typing import Any
 from pathlib import Path
 from tqdm.auto import tqdm
 from src.problems.base_generator import BaseProblemGenerator
-from src.problems.rajapakse_homogeneous.influence import influence, load_native_library
+from src.problems.rajapakse_homogeneous.influence import _ensure_library_available, influence
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +244,7 @@ class RajapakseHomogeneousGenerator(BaseProblemGenerator):
     def generate(self):
         # Fail fast before the integration loop if the native Rajapakse solver
         # cannot be loaded on this machine.
-        load_native_library()
+        _ensure_library_available()
         seed = int(self.config.get("seed", 42))
         rng = np.random.default_rng(seed)
 
